@@ -6,7 +6,9 @@ import type { OrderStatus } from "@/lib/types/database";
 /**
  * Vercel Cron job - polls providers for order status updates.
  * Configure in vercel.json:
- *   "crons": [{ "path": "/api/cron/order-status", "schedule": "every 5 minutes" }]
+ *   "crons": [{ "path": "/api/cron/order-status", "schedule": "once per day" }]
+ *
+ * Vercel Hobby plan cron jobs are limited to a once-per-day schedule.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

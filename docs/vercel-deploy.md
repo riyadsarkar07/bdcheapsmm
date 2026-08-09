@@ -31,10 +31,12 @@ Apply them to **Production**, **Preview**, and **Development** environments, the
 
 ## 4. Cron job (order status polling)
 
-The `vercel.json` at the repo root registers a cron that hits `/api/cron/order-status` every 5 minutes so provider order statuses stay in sync.
+The `vercel.json` at the repo root registers a cron that hits `/api/cron/order-status` once per day so provider order statuses stay in sync.
 
 - The route only accepts requests with `Authorization: Bearer <CRON_SECRET>`.
-- Cron requires a **Pro** (paid) plan on Vercel. On the free tier, create a schedule instead using an external service such as cron-job.org or GitHub Actions that calls the endpoint with the `Authorization` header.
+- Vercel **Hobby** plans allow cron jobs at most **once per day** (schedule `0 0 * * *`, UTC); more frequent expressions such as `*/5 * * * *` fail deployment.
+- On Hobby, the cron runs at the scheduled hour with ±59 minute timing precision.
+- If your app needs status updates more often than once per day, do **not** add another Vercel cron (Hobby is daily-only). Instead, keep the Hobby cron as a daily fallback and trigger `/api/cron/order-status` on demand from the app after order actions, or use an external scheduler such as GitHub Actions / cron-job.org calling the endpoint with the `Authorization` header.
 
 ## 5. Auth callback URLs
 
