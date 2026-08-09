@@ -174,3 +174,13 @@
 *.lz
 *.lzma
 *.iso
+
+# Next.js
+**/.next/
+**/out/
+next-env.d.ts
+.vercel
+.env.production
+.env.test
+supabase/.branches
+supabase/.temp
