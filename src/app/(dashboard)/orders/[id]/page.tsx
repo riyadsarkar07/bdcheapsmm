@@ -18,7 +18,7 @@ export default async function OrderDetailPage({
   const supabase = await createClient();
   const { data: order } = await supabase
     .from("orders")
-    .select("*, services(id, name, slug, type, provider_service_id), profiles(full_name, email)")
+    .select("*, services(id, name, slug, type), profiles(full_name, email)")
     .eq("id", id)
     .maybeSingle();
 
@@ -40,7 +40,11 @@ export default async function OrderDetailPage({
           <ArrowLeft /> Back to orders
         </Link>
       </Button>
-      <OrderDetailClient order={order} providerName={provider?.name ?? null} />
+      <OrderDetailClient
+        order={order}
+        providerName={user.role === "admin" ? provider?.name ?? null : null}
+        isAdmin={user.role === "admin"}
+      />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Search, Loader2, RefreshCw, Undo2 } from "lucide-react";
+import { Search, Loader2, RefreshCw, Undo2, RotateCcw, XCircle, Zap } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +22,12 @@ import {
   adminRefundOrderAction,
   adminBulkRetryFailedOrdersAction,
 } from "@/lib/actions/admin";
+import {
+  cancelOrderAction,
+  refreshOrderStatusAction,
+  refillOrderAction,
+  retryFailedOrderAction,
+} from "@/lib/actions/orders";
 import { formatCurrency, formatDateTime, truncate } from "@/lib/utils";
 import type { OrderStatus } from "@/lib/types/database";
 
@@ -83,6 +89,21 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
     }
   }
 
+  async function runOrderAction(order: OrderRow, name: string, fn: () => Promise<{ success: boolean; error?: string }>) {
+    setActionLoading(order.id + name);
+    try {
+      const result = await fn();
+      if (result.success) {
+        toast.success(`Order #${order.order_number}: ${name}`);
+        router.refresh();
+      } else {
+        toast.error(result.error ?? `${name} failed`);
+      }
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function refund(order: OrderRow) {
     setActionLoading(order.id + "refund");
     try {
@@ -112,6 +133,10 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
       setRetrying(false);
     }
   }
+
+  const canCancel = (status: OrderStatus) => ["pending", "processing", "in_progress"].includes(status);
+  const canRefill = (status: OrderStatus) => status === "completed" || status === "partial";
+  const canRetry = (status: OrderStatus) => status === "failed" || status === "rejected";
 
   return (
     <div>
@@ -188,9 +213,9 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{formatDateTime(order.created_at, "MMM d, h:mm a")}</td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center justify-end gap-1">
                           <Select value={order.status} onValueChange={(v) => setStatus(order, v as OrderStatus)}>
-                            <SelectTrigger className="h-8 w-36 text-xs">
+                            <SelectTrigger className="h-8 w-32 text-xs">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -199,6 +224,62 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                               ))}
                             </SelectContent>
                           </Select>
+                          {order.provider_order_id ? (
+                            <Button
+                              variant="ghost"
+                              size="iconSm"
+                              className="text-primary hover:text-primary"
+                              onClick={() =>
+                                runOrderAction(order, "Check Status", () => refreshOrderStatusAction(order.id))
+                              }
+                              disabled={actionLoading === order.id + "Check Status"}
+                              title="Check status with provider (SMMFollow)"
+                            >
+                              {actionLoading === order.id + "Check Status" ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                            </Button>
+                          ) : null}
+                          {canRefill(order.status) ? (
+                            <Button
+                              variant="ghost"
+                              size="iconSm"
+                              className="text-warning hover:text-warning"
+                              onClick={() =>
+                                runOrderAction(order, "Refill", () => refillOrderAction(order.id))
+                              }
+                              disabled={actionLoading === order.id + "Refill"}
+                              title="Request refill"
+                            >
+                              {actionLoading === order.id + "Refill" ? <Loader2 className="animate-spin" /> : <RotateCcw />}
+                            </Button>
+                          ) : null}
+                          {canRetry(order.status) ? (
+                            <Button
+                              variant="ghost"
+                              size="iconSm"
+                              className="text-primary hover:text-primary"
+                              onClick={() =>
+                                runOrderAction(order, "Retry", () => retryFailedOrderAction(order.id))
+                              }
+                              disabled={actionLoading === order.id + "Retry"}
+                              title="Retry order"
+                            >
+                              {actionLoading === order.id + "Retry" ? <Loader2 className="animate-spin" /> : <Zap />}
+                            </Button>
+                          ) : null}
+                          {canCancel(order.status) ? (
+                            <Button
+                              variant="ghost"
+                              size="iconSm"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() =>
+                                runOrderAction(order, "Cancel", () => cancelOrderAction(order.id))
+                              }
+                              disabled={actionLoading === order.id + "Cancel"}
+                              title="Cancel order"
+                            >
+                              {actionLoading === order.id + "Cancel" ? <Loader2 className="animate-spin" /> : <XCircle />}
+                            </Button>
+                          ) : null}
                           {order.status !== "refunded" ? (
                             <Button
                               variant="ghost"

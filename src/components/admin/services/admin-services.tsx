@@ -68,6 +68,7 @@ type ServiceRow = {
   is_active: boolean;
   is_featured: boolean;
   profit_margin: number;
+  pricing_mode: "global" | "custom";
   created_at: string;
 };
 
@@ -86,6 +87,7 @@ const serviceFormSchema = z.object({
   averageTime: z.string().optional().or(z.literal("")),
   type: z.string().optional().or(z.literal("")),
   profitMargin: z.coerce.number().min(-100).max(100),
+  pricingMode: z.enum(["global", "custom"]),
   isActive: z.boolean(),
   isFeatured: z.boolean(),
 });
@@ -227,6 +229,7 @@ export function AdminServices({
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Price</th>
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Provider Price</th>
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Margin</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Mode</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Range</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Active</th>
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
@@ -260,6 +263,11 @@ export function AdminServices({
                           {service.provider_price != null ? formatCurrency(service.provider_price, "BDT") : "—"}
                         </td>
                         <td className="px-4 py-3 text-right">{service.profit_margin}%</td>
+                        <td className="px-4 py-3 text-right">
+                          <Badge variant={service.pricing_mode === "custom" ? "secondary" : "subtle"} className="px-1.5 py-0 text-[10px]">
+                            {service.pricing_mode === "custom" ? "Custom" : "Global"}
+                          </Badge>
+                        </td>
                         <td className="px-4 py-3 text-muted-foreground">
                           {service.min_quantity.toLocaleString()} - {service.max_quantity.toLocaleString()}
                         </td>
@@ -371,6 +379,7 @@ function ServiceFormDialog({
       averageTime: service?.average_time ?? "",
       type: service?.type ?? "",
       profitMargin: service?.profit_margin ?? 0,
+      pricingMode: service?.pricing_mode ?? "global",
       isActive: service?.is_active ?? true,
       isFeatured: service?.is_featured ?? false,
     },
@@ -469,6 +478,22 @@ function ServiceFormDialog({
           <div className="space-y-2">
             <Label>Profit Margin (%)</Label>
             <Input type="number" step="0.01" {...form.register("profitMargin")} />
+          </div>
+          <div className="space-y-2">
+            <Label>Pricing Mode</Label>
+            <Select
+              value={form.watch("pricingMode")}
+              onValueChange={(v) => form.setValue("pricingMode", v as "global" | "custom")}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="global">Global Markup (follows global profit %)</SelectItem>
+                <SelectItem value="custom">Custom Price (never auto-changed)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Custom Price services keep their manual price and are excluded from global profit &amp; sync updates.
+            </p>
           </div>
           <div className="flex items-center gap-6">
             <label className="flex items-center gap-2 text-sm">

@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Loader2, Pencil, Trash2, Plus, RefreshCw, Wallet, Server, ShieldCheck } from "lucide-react";
+import { Loader2, Pencil, Trash2, Plus, RefreshCw, Wallet, Server, ShieldCheck, PlugZap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,7 @@ import {
   deleteProviderAction,
   syncProviderServicesAction,
   checkProviderBalanceAction,
+  testProviderConnectionAction,
 } from "@/lib/actions/admin";
 import { formatCurrency, timeAgo } from "@/lib/utils";
 
@@ -67,6 +68,7 @@ export function AdminProviders({
   const [editing, setEditing] = React.useState<ProviderRow | null>(null);
   const [creating, setCreating] = React.useState(false);
   const [syncingId, setSyncingId] = React.useState<string | null>(null);
+  const [testingId, setTestingId] = React.useState<string | null>(null);
   const [checkingId, setCheckingId] = React.useState<string | null>(null);
 
   async function sync(providerId: string) {
@@ -96,6 +98,20 @@ export function AdminProviders({
       router.refresh();
     } finally {
       setCheckingId(null);
+    }
+  }
+
+  async function testConnection(providerId: string) {
+    setTestingId(providerId);
+    try {
+      const result = await testProviderConnectionAction(providerId);
+      if (result.success) {
+        toast.success(result.message ?? "Connection OK");
+      } else {
+        toast.error(result.error ?? "Connection failed");
+      }
+    } finally {
+      setTestingId(null);
     }
   }
 
@@ -162,6 +178,10 @@ export function AdminProviders({
                   <Button variant="outline" size="sm" onClick={() => checkBalance(provider.id)} disabled={checkingId === provider.id}>
                     {checkingId === provider.id ? <Loader2 className="animate-spin" /> : <Wallet />}
                     Balance
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => testConnection(provider.id)} disabled={testingId === provider.id}>
+                    {testingId === provider.id ? <Loader2 className="animate-spin" /> : <PlugZap />}
+                    Test
                   </Button>
                   <Button variant="ghost" size="iconSm" onClick={() => setEditing(provider)} aria-label="Edit provider">
                     <Pencil className="h-3.5 w-3.5" />

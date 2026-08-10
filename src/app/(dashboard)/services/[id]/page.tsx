@@ -21,7 +21,9 @@ export default async function ServiceOrderPage({
   const supabase = await createClient();
   const { data: service } = await supabase
     .from("services")
-    .select("*, categories(name, slug, icon), providers(name)")
+    .select(
+      "id, name, slug, description, price, min_quantity, max_quantity, average_time, type, is_active, is_featured, category_id, categories(name, slug, icon), providers(id, name)"
+    )
     .eq("id", id)
     .maybeSingle();
 

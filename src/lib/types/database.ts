@@ -50,7 +50,9 @@ export type LogAction =
   | "service_import"
   | "balance_adjust"
   | "settings_update"
-  | "coupon_apply";
+  | "coupon_apply"
+  | "suspend"
+  | "unsuspend";
 
 export type Profile = {
   id: string;
@@ -115,6 +117,7 @@ export type Service = {
   is_featured: boolean;
   is_favorite: boolean;
   profit_margin: number;
+  pricing_mode: "global" | "custom";
   meta: Json;
   created_at: string;
   updated_at: string;

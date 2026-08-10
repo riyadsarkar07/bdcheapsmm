@@ -30,6 +30,7 @@ import { EmptyState } from "@/components/empty-state";
 import {
   updateUserAction,
   adjustUserBalanceAction,
+  setUserStatusAction,
 } from "@/lib/actions/admin";
 import { getInitials, formatCurrency, formatDate } from "@/lib/utils";
 import type { Profile } from "@/lib/types/database";
@@ -139,17 +140,11 @@ export function AdminUsers({
                               size="iconSm"
                               className="text-destructive hover:text-destructive"
                               onClick={async () => {
-                                const result = await updateUserAction(userRow.id, {
-                                  fullName: userRow.full_name ?? "",
-                                  phone: userRow.phone ?? "",
-                                  country: userRow.country ?? "",
-                                  currency: userRow.currency,
-                                  timezone: userRow.timezone,
-                                  status: "banned",
-                                  role: userRow.role,
-                                });
+                                const reason = window.prompt("Reason for suspending this user? (optional)");
+                                if (reason === null) return;
+                                const result = await setUserStatusAction(userRow.id, "banned", reason || undefined);
                                 if (result.success) {
-                                  toast.success("User banned");
+                                  toast.success(result.message ?? "User suspended");
                                   router.refresh();
                                 } else {
                                   toast.error(result.error ?? "Failed");
@@ -165,17 +160,9 @@ export function AdminUsers({
                               size="iconSm"
                               className="text-success hover:text-success"
                               onClick={async () => {
-                                const result = await updateUserAction(userRow.id, {
-                                  fullName: userRow.full_name ?? "",
-                                  phone: userRow.phone ?? "",
-                                  country: userRow.country ?? "",
-                                  currency: userRow.currency,
-                                  timezone: userRow.timezone,
-                                  status: "active",
-                                  role: userRow.role,
-                                });
+                                const result = await setUserStatusAction(userRow.id, "active");
                                 if (result.success) {
-                                  toast.success("User unbanned");
+                                  toast.success(result.message ?? "User reactivated");
                                   router.refresh();
                                 } else {
                                   toast.error(result.error ?? "Failed");

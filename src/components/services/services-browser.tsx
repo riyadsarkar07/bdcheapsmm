@@ -52,7 +52,9 @@ export function ServicesBrowser() {
     queryFn: async () => {
       let query = supabase
         .from("services")
-        .select("*, categories(name, slug, icon)")
+        .select(
+          "id, name, slug, description, price, min_quantity, max_quantity, average_time, type, is_active, is_featured, category_id, categories(name, slug, icon)"
+        )
         .eq("is_active", true);
 
       if (activeCategory) {

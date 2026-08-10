@@ -121,6 +121,7 @@ export async function createServiceAction(input: unknown): Promise<ActionResult>
       average_time: parsed.data.averageTime || null,
       type: parsed.data.type || null,
       profit_margin: parsed.data.profitMargin,
+      pricing_mode: parsed.data.pricingMode,
       is_active: parsed.data.isActive,
       is_featured: parsed.data.isFeatured,
     })
@@ -152,6 +153,7 @@ export async function updateServiceAction(id: string, input: unknown): Promise<A
     average_time: parsed.data.averageTime || null,
     type: parsed.data.type || null,
     profit_margin: parsed.data.profitMargin,
+    pricing_mode: parsed.data.pricingMode,
     is_active: parsed.data.isActive,
     is_featured: parsed.data.isFeatured,
   }).eq("id", id);
@@ -207,21 +209,26 @@ export async function bulkPriceUpdateAction(input: {
   const supabase = await createClient();
   const { data: services } = await supabase
     .from("services")
-    .select("id, provider_price, price, profit_margin")
+    .select("id, provider_price, price, profit_margin, pricing_mode")
     .in("id", input.ids);
 
   if (!services) return fail("Failed to load services.");
 
+  let changed = 0;
   for (const service of services) {
-    let newPrice = service.price;
-    let newMargin = service.profit_margin;
     if (input.mode === "percentage") {
-      newPrice = round2(service.price * (1 + input.value / 100));
-    } else if (input.mode === "margin" && service.provider_price != null) {
-      newMargin = input.value;
-      newPrice = computeRetailPrice(service.provider_price, input.value);
+      // Manual markup: always applies and switches the service to custom pricing.
+      const newPrice = Math.max(round2(service.price * (1 + input.value / 100)), 0);
+      await supabase.from("services").update({ price: newPrice, pricing_mode: "custom" }).eq("id", service.id);
+      changed++;
+    } else if (input.mode === "margin") {
+      // Margin mode only applies to global-markup services; custom prices stay untouched.
+      if (service.pricing_mode === "custom") continue;
+      if (service.provider_price == null) continue;
+      const newPrice = computeRetailPrice(service.provider_price, input.value);
+      await supabase.from("services").update({ price: newPrice, profit_margin: input.value }).eq("id", service.id);
+      changed++;
     }
-    await supabase.from("services").update({ price: Math.max(newPrice, 0), profit_margin: newMargin }).eq("id", service.id);
   }
 
   await writeLog({
@@ -229,9 +236,77 @@ export async function bulkPriceUpdateAction(input: {
     action: "update",
     entityType: "services",
     entityId: input.ids.join(","),
-    description: `Bulk price update (${input.mode} ${input.value}%) on ${input.ids.length} services`,
+    description: `Bulk price update (${input.mode} ${input.value}%) on ${changed} services`,
   });
-  return ok(undefined, `Updated ${input.ids.length} services.`);
+  return ok(undefined, `Updated ${changed} services.`);
+}
+
+export async function previewGlobalProfitAction(input: { profitPercentage: number; rounding: "round2" | "round" | "ceil" }): Promise<
+  ActionResult<{ total: number; preview: { id: string; name: string; price: number; newPrice: number; providerPrice: number }[] }>
+> {
+  const { user, error } = await requireAdmin();
+  if (error || !user) return fail(error ?? "Not authenticated");
+
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { data: services } = await supabase
+    .from("services")
+    .select("id, name, price, provider_price")
+    .eq("pricing_mode", "global")
+    .not("provider_price", "is", null);
+
+  if (!services) return fail("Failed to load services.");
+
+  const preview = services.map((s) => {
+    const newPrice = applyRounding(computeRetailPrice(s.provider_price!, input.profitPercentage), input.rounding);
+    return { id: s.id, name: s.name, price: s.price, newPrice, providerPrice: s.provider_price! };
+  });
+
+  return ok({ total: preview.length, preview });
+}
+
+export async function applyGlobalProfitAction(input: { profitPercentage: number; rounding: "round2" | "round" | "ceil" }): Promise<
+  ActionResult<{ updated: number }>
+> {
+  const { user, error } = await requireAdmin();
+  if (error || !user) return fail(error ?? "Not authenticated");
+
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { data: services } = await supabase
+    .from("services")
+    .select("id, provider_price")
+    .eq("pricing_mode", "global")
+    .not("provider_price", "is", null);
+
+  if (!services) return fail("Failed to load services.");
+
+  for (const service of services) {
+    const newPrice = applyRounding(computeRetailPrice(service.provider_price!, input.profitPercentage), input.rounding);
+    await supabase.from("services").update({
+      price: newPrice,
+      profit_margin: input.profitPercentage,
+    }).eq("id", service.id);
+  }
+
+  await setSetting("pricing", {
+    global_profit_percentage: input.profitPercentage,
+    rounding: input.rounding,
+  });
+
+  await writeLog({
+    userId: user.id,
+    action: "update",
+    entityType: "services",
+    description: `Applied global profit ${input.profitPercentage}% (${input.rounding}) to ${services.length} global-markup services`,
+  });
+  return ok({ updated: services.length }, `Applied global profit to ${services.length} services.`);
+}
+
+function applyRounding(value: number, rounding: "round2" | "round" | "ceil"): number {
+  if (rounding === "round") return Math.round(value);
+  if (rounding === "ceil") return Math.ceil(value);
+  return round2(value);
 }
 
 // ============================================================
@@ -365,25 +440,55 @@ export async function syncProviderServicesAction(providerId: string): Promise<Ac
 
       const { data: existingService } = await supabase
         .from("services")
-        .select("id, price, profit_margin")
+        .select("id, price, profit_margin, pricing_mode")
         .eq("provider_id", provider.id)
         .eq("provider_service_id", String(item.service))
         .maybeSingle();
 
       if (existingService) {
-        await supabase.from("services").update({
-          ...payload,
-          price: computeRetailPrice(providerPrice, existingService.profit_margin),
-        }).eq("id", existingService.id);
+        if (existingService.pricing_mode === "custom") {
+          // Preserve the manually-set price and local category; refresh everything else.
+          await supabase.from("services").update({
+            name: payload.name,
+            description: payload.description,
+            provider_price: payload.provider_price,
+            min_quantity: payload.min_quantity,
+            max_quantity: payload.max_quantity,
+            average_time: payload.average_time,
+            type: payload.type,
+            meta: payload.meta,
+            is_active: true,
+          }).eq("id", existingService.id);
+        } else {
+          // Preserve the local category override; refresh provider fields.
+          await supabase.from("services").update({
+            ...payload,
+            category_id: undefined,
+            price: computeRetailPrice(providerPrice, existingService.profit_margin),
+          }).eq("id", existingService.id);
+        }
         updated++;
       } else {
         await supabase.from("services").insert({
           ...payload,
           price: computeRetailPrice(providerPrice, 20),
           profit_margin: 20,
+          pricing_mode: "global",
           is_active: true,
         });
         imported++;
+      }
+    }
+
+    // Disable provider services that no longer exist upstream (never delete).
+    const providerServiceIds = items.map((item) => String(item.service));
+    const { data: staleServices } = await supabase
+      .from("services")
+      .select("id, provider_service_id")
+      .eq("provider_id", provider.id);
+    for (const stale of staleServices ?? []) {
+      if (stale.provider_service_id && !providerServiceIds.includes(stale.provider_service_id)) {
+        await supabase.from("services").update({ is_active: false }).eq("id", stale.id);
       }
     }
 
@@ -416,6 +521,30 @@ export async function checkProviderBalanceAction(providerId: string): Promise<Ac
     return ok({ balance: result.balance });
   } catch (err) {
     return fail((err as Error).message);
+  }
+}
+
+export async function testProviderConnectionAction(providerId: string): Promise<ActionResult<{ ok: boolean; latencyMs: number }>> {
+  const { user, error } = await requireAdmin();
+  if (error || !user) return fail(error ?? "Not authenticated");
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { data: provider } = await supabase.from("providers").select("*").eq("id", providerId).single();
+  if (!provider) return fail("Provider not found.");
+  try {
+    const startedAt = Date.now();
+    await providerApi.getBalance(provider);
+    const latencyMs = Date.now() - startedAt;
+    await writeLog({
+      userId: user.id,
+      action: "provider_sync",
+      entityType: "providers",
+      entityId: provider.id,
+      description: `Tested provider connection for ${provider.name}`,
+    });
+    return ok({ ok: true, latencyMs }, `Connection OK (${latencyMs}ms).`);
+  } catch (err) {
+    return fail(`Connection failed: ${(err as Error).message}`);
   }
 }
 
@@ -557,6 +686,55 @@ export async function updateUserAction(id: string, input: unknown): Promise<Acti
   if (updateError) return fail(updateError.message);
   await writeLog({ userId: user.id, action: "update", entityType: "profiles", entityId: id, description: `Updated user ${parsed.data.fullName}` });
   return ok(undefined, "User updated.");
+}
+
+export async function setUserStatusAction(id: string, status: "active" | "banned", reason?: string): Promise<ActionResult> {
+  const { user, error } = await requireAdmin();
+  if (error || !user) return fail(error ?? "Not authenticated");
+  if (id === user.id && status === "banned") {
+    return fail("You cannot suspend your own account.");
+  }
+
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { data: target } = await supabase
+    .from("profiles")
+    .select("id, full_name, email, status, currency")
+    .eq("id", id)
+    .maybeSingle();
+  if (!target) return fail("User not found.");
+  if (target.status === status) return fail(`User is already ${status}.`);
+
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({ status })
+    .eq("id", id);
+  if (updateError) return fail(updateError.message);
+
+  const actionLabel = status === "banned" ? "Suspended" : "Reactivated";
+  await writeLog({
+    userId: user.id,
+    action: status === "banned" ? "suspend" : "unsuspend",
+    entityType: "profiles",
+    entityId: id,
+    description: `${actionLabel} user ${target.full_name}${reason ? `: ${reason}` : ""}`,
+    meta: { reason: reason ?? null },
+  });
+
+  await createNotification({
+    userId: id,
+    type: "system_announcement",
+    title: `Account ${status === "banned" ? "suspended" : "reactivated"}`,
+    body:
+      status === "banned"
+        ? reason
+          ? `Your account has been suspended. Reason: ${reason}`
+          : "Your account has been suspended."
+        : "Your account has been reactivated. You can log in again.",
+    link: "/dashboard",
+  });
+
+  return ok(undefined, `${actionLabel} ${target.full_name}.`);
 }
 
 export async function adjustUserBalanceAction(id: string, input: unknown): Promise<ActionResult> {

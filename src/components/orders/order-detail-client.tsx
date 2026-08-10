@@ -40,9 +40,11 @@ interface OrderWithRelations extends Order {
 export function OrderDetailClient({
   order,
   providerName,
+  isAdmin = false,
 }: {
   order: OrderWithRelations;
   providerName: string | null;
+  isAdmin?: boolean;
 }) {
   const router = useRouter();
   const [orderState, setOrderState] = React.useState(order);
@@ -219,7 +221,7 @@ export function OrderDetailClient({
         </Card>
       </div>
 
-      {orderState.provider_response ? (
+      {isAdmin && orderState.provider_response ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-sm">Provider Response</CardTitle>

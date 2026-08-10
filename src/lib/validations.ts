@@ -123,6 +123,7 @@ export const adminServiceSchema = z.object({
   averageTime: z.string().max(100).optional().or(z.literal("")),
   type: z.string().max(100).optional().or(z.literal("")),
   profitMargin: z.coerce.number().min(-100).max(100).default(0),
+  pricingMode: z.enum(["global", "custom"]).default("global"),
   isActive: z.boolean().default(true),
   isFeatured: z.boolean().default(false),
 }).refine((data) => data.maxQuantity >= data.minQuantity, {

@@ -23,6 +23,7 @@ import {
   Shield,
   Menu,
   ArrowLeft,
+  TrendingUp,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -46,6 +47,7 @@ const adminNav = [
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/orders", label: "Orders", icon: ShoppingCart },
   { href: "/admin/services", label: "Services", icon: Layers },
+  { href: "/admin/pricing", label: "Pricing & Profit", icon: TrendingUp },
   { href: "/admin/categories", label: "Categories", icon: FolderTree },
   { href: "/admin/providers", label: "Providers", icon: Server },
   { href: "/admin/payments", label: "Payments", icon: Banknote },
