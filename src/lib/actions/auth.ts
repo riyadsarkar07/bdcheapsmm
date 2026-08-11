@@ -3,7 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { signInSchema, signUpSchema, forgotPasswordSchema, resetPasswordSchema } from "@/lib/validations";
-import { fail, ok, type ActionResult } from "@/lib/guards";
+import { fail, ok, isAdminProfile, type ActionResult } from "@/lib/guards";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { writeLog } from "@/lib/audit";
 
@@ -49,7 +49,7 @@ export async function signInAction(input: {
     return fail("Your account has been suspended. Contact support.");
   }
 
-  const target = profile?.role === "admin" ? "/admin" : "/dashboard";
+  const target = profile && isAdminProfile(profile) ? "/admin" : "/dashboard";
   await writeLog({
     userId: data.user.id,
     action: "login",

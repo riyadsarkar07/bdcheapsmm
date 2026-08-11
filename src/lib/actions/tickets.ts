@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { createTicketSchema, replyTicketSchema } from "@/lib/validations";
-import { fail, ok, requireUser, type ActionResult } from "@/lib/guards";
+import { fail, ok, requireUser, isAdminProfile, type ActionResult } from "@/lib/guards";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { generateTicketNumber } from "@/lib/utils";
 import { writeLog } from "@/lib/audit";
@@ -31,28 +31,18 @@ export async function createTicketAction(input: {
 
   const ticketNumber = generateTicketNumber();
 
-  const { data: ticket, error: ticketError } = await supabase
-    .from("tickets")
-    .insert({
-      ticket_number: ticketNumber,
-      user_id: user.id,
-      subject: parsed.data.subject,
-      priority: parsed.data.priority,
-      category: parsed.data.category || null,
-      status: "open",
-    })
-    .select("*")
-    .single();
+  const { data: ticket, error: ticketError } = await supabase.rpc(
+    "create_ticket_with_message",
+    {
+      p_ticket_number: ticketNumber,
+      p_subject: parsed.data.subject,
+      p_priority: parsed.data.priority,
+      p_category: parsed.data.category || null,
+      p_message: parsed.data.message,
+    }
+  );
 
   if (ticketError || !ticket) return fail("Failed to create ticket.");
-
-  const { error: msgError } = await supabase.from("ticket_messages").insert({
-    ticket_id: ticket.id,
-    user_id: user.id,
-    message: parsed.data.message,
-    is_staff: false,
-  });
-  if (msgError) return fail("Ticket created but message failed to save.");
 
   await notifyAllAdmins({
     type: "ticket_reply",
@@ -101,23 +91,17 @@ export async function replyTicketAction(input: {
     .single();
 
   if (ticketError || !ticket) return fail("Ticket not found.");
-  if (ticket.user_id !== user.id && user.role !== "admin") return fail("Forbidden.");
+  if (ticket.user_id !== user.id && !isAdminProfile(user)) return fail("Forbidden.");
   if (ticket.status === "closed") return fail("This ticket is closed.");
 
-  const isStaff = user.role === "admin";
-  const { error: msgError } = await supabase.from("ticket_messages").insert({
-    ticket_id: ticket.id,
-    user_id: user.id,
-    message: parsed.data.message,
-    is_staff: isStaff,
+  const isStaff = isAdminProfile(user);
+  const { error: msgError } = await supabase.rpc("create_ticket_message", {
+    p_ticket_id: ticket.id,
+    p_message: parsed.data.message,
+    p_is_staff: isStaff,
   });
 
   if (msgError) return fail("Failed to send message.");
-
-  await supabase
-    .from("tickets")
-    .update({ status: isStaff ? "open" : "waiting", last_message_at: new Date().toISOString() })
-    .eq("id", ticket.id);
 
   if (isStaff) {
     await writeLog({
@@ -148,7 +132,7 @@ export async function closeTicketAction(ticketId: string): Promise<ActionResult>
     .single();
 
   if (!ticket) return fail("Ticket not found.");
-  if (ticket.user_id !== user.id && user.role !== "admin") return fail("Forbidden.");
+  if (ticket.user_id !== user.id && !isAdminProfile(user)) return fail("Forbidden.");
 
   await supabase.from("tickets").update({ status: "closed" }).eq("id", ticketId);
   return ok(undefined, "Ticket closed.");
@@ -157,7 +141,7 @@ export async function closeTicketAction(ticketId: string): Promise<ActionResult>
 export async function reopenTicketAction(ticketId: string): Promise<ActionResult> {
   const { user, error } = await requireUser();
   if (error || !user) return fail(error ?? "Not authenticated");
-  if (user.role !== "admin") return fail("Forbidden.");
+  if (!isAdminProfile(user)) return fail("Forbidden.");
 
   const { createClient } = await import("@/lib/supabase/server");
   const supabase = await createClient();

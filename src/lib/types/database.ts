@@ -494,6 +494,20 @@ export type Database = {
       current_profile: { Args: Record<never, never>; Returns: Profile };
       get_coupon: { Args: { p_code: string }; Returns: Coupon };
       deduct_order_cost: { Args: { p_order_id: string; p_user_id: string }; Returns: Order };
+      create_ticket_with_message: {
+        Args: {
+          p_ticket_number: string;
+          p_subject: string;
+          p_priority: string;
+          p_category?: string | null;
+          p_message: string;
+        };
+        Returns: Ticket;
+      };
+      create_ticket_message: {
+        Args: { p_ticket_id: string; p_message: string; p_is_staff?: boolean };
+        Returns: TicketMessage;
+      };
       refund_order: { Args: { p_order_id: string; p_refunded_by: string }; Returns: Order };
       create_notification: {
         Args: {

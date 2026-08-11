@@ -22,7 +22,7 @@ export default async function AdminLayout({
     .maybeSingle();
 
   if (!profile) redirect("/login");
-  if (profile.role !== "admin") redirect("/dashboard");
+  if (profile.role !== "admin" || profile.status !== "active") redirect("/dashboard");
 
   return (
     <AdminShell profile={profile as Profile}>{children}</AdminShell>

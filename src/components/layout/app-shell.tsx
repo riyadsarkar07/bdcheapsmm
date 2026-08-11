@@ -89,7 +89,7 @@ export function AppShell({
             </Link>
           );
         })}
-        {profile.role === "admin" ? (
+        {profile.role === "admin" && profile.status === "active" ? (
           <Link
             href="/admin"
             onClick={onNavigate}

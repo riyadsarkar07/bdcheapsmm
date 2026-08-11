@@ -15,6 +15,12 @@ export function fail<T = never>(message: string): ActionResult<T> {
   return { success: false, error: message, message };
 }
 
+export function isAdminProfile(
+  profile: Pick<Profile, "role" | "status">
+): boolean {
+  return profile.role === "admin" && profile.status === "active";
+}
+
 export async function requireUser(): Promise<
   | { user: Profile; error?: undefined }
   | { user: null; error: string }
@@ -54,7 +60,7 @@ export async function requireAdmin(): Promise<
 > {
   const result = await requireUser();
   if (result.error || !result.user) return result;
-  if (result.user.role !== "admin") {
+  if (!isAdminProfile(result.user)) {
     return { user: null, error: "Forbidden: administrators only." };
   }
   return result;

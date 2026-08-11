@@ -11,13 +11,19 @@ export function formatCurrency(
   currency = "BDT"
 ): string {
   const value = Number(amount ?? 0);
-  if (currency === "BDT") {
+  if (Number.isNaN(value)) return "৳0";
+  const code = (currency ?? "BDT").toUpperCase();
+  if (code === "BDT") {
     return "৳" + value.toLocaleString("en-US", { maximumFractionDigits: 2 });
   }
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-  }).format(value);
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: code,
+    }).format(value);
+  } catch {
+    return code + " " + value.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  }
 }
 
 export function formatNumber(value: number | string | null | undefined): string {
@@ -30,7 +36,11 @@ export function formatDate(
   pattern = "MMM d, yyyy"
 ): string {
   if (!date) return "—";
-  return format(new Date(date), pattern);
+  try {
+    return format(new Date(date), pattern);
+  } catch {
+    return "—";
+  }
 }
 
 export function formatDateTime(
@@ -38,12 +48,20 @@ export function formatDateTime(
   pattern = "MMM d, yyyy h:mm a"
 ): string {
   if (!date) return "—";
-  return format(new Date(date), pattern);
+  try {
+    return format(new Date(date), pattern);
+  } catch {
+    return "—";
+  }
 }
 
 export function timeAgo(date: string | Date | null | undefined): string {
   if (!date) return "—";
-  return formatDistanceToNowStrict(new Date(date), { addSuffix: true });
+  try {
+    return formatDistanceToNowStrict(new Date(date), { addSuffix: true });
+  } catch {
+    return "—";
+  }
 }
 
 export function generateOrderNumber(): string {

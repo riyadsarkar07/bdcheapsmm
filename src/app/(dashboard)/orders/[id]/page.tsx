@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { requireUser } from "@/lib/guards";
+import { requireUser, isAdminProfile } from "@/lib/guards";
 import { OrderDetailClient } from "@/components/orders/order-detail-client";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -23,7 +23,7 @@ export default async function OrderDetailPage({
     .maybeSingle();
 
   if (!order) notFound();
-  if (order.user_id !== user.id && user.role !== "admin") notFound();
+  if (order.user_id !== user.id && !isAdminProfile(user)) notFound();
 
   const { data: provider } = order.provider_id
     ? await supabase
@@ -42,8 +42,8 @@ export default async function OrderDetailPage({
       </Button>
       <OrderDetailClient
         order={order}
-        providerName={user.role === "admin" ? provider?.name ?? null : null}
-        isAdmin={user.role === "admin"}
+        providerName={isAdminProfile(user) ? provider?.name ?? null : null}
+        isAdmin={isAdminProfile(user)}
       />
     </div>
   );

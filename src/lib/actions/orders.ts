@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { createOrderSchema } from "@/lib/validations";
-import { fail, ok, requireUser, type ActionResult } from "@/lib/guards";
+import { fail, ok, requireUser, isAdminProfile, type ActionResult } from "@/lib/guards";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { generateOrderNumber } from "@/lib/utils";
 import { providerApi } from "@/lib/provider/smmfollow";
@@ -243,7 +243,7 @@ export async function cancelOrderAction(orderId: string): Promise<ActionResult> 
     .single();
 
   if (orderError || !order) return fail("Order not found.");
-  if (order.user_id !== user.id && user.role !== "admin") return fail("Forbidden.");
+  if (order.user_id !== user.id && !isAdminProfile(user)) return fail("Forbidden.");
   if (!["pending", "processing", "in_progress"].includes(order.status)) {
     return fail("This order cannot be cancelled.");
   }
@@ -320,7 +320,7 @@ export async function refreshOrderStatusAction(orderId: string): Promise<ActionR
     .single();
 
   if (!order) return fail("Order not found.");
-  if (order.user_id !== user.id && user.role !== "admin") return fail("Forbidden.");
+  if (order.user_id !== user.id && !isAdminProfile(user)) return fail("Forbidden.");
   if (!order.provider_order_id) return fail("Order has no provider reference yet.");
   if (!order.provider_id) return fail("Provider not found.");
 
@@ -362,7 +362,7 @@ export async function refillOrderAction(orderId: string): Promise<ActionResult> 
     .single();
 
   if (!order) return fail("Order not found.");
-  if (order.user_id !== user.id && user.role !== "admin") return fail("Forbidden.");
+  if (order.user_id !== user.id && !isAdminProfile(user)) return fail("Forbidden.");
   if (!order.provider_order_id) return fail("No provider order reference.");
   if ((order.refill_count ?? 0) >= 2) return fail("Refill limit reached for this order.");
   if (!order.provider_id) return fail("Provider not found.");
@@ -405,7 +405,7 @@ export async function retryFailedOrderAction(orderId: string): Promise<ActionRes
     .single();
 
   if (!order) return fail("Order not found.");
-  if (order.user_id !== user.id && user.role !== "admin") return fail("Forbidden.");
+  if (order.user_id !== user.id && !isAdminProfile(user)) return fail("Forbidden.");
   if (order.status !== "failed" && order.status !== "rejected") {
     return fail("Only failed orders can be retried.");
   }

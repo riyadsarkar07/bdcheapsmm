@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { requireUser } from "@/lib/guards";
+import { requireUser, isAdminProfile } from "@/lib/guards";
 import { TicketThread } from "@/components/support/ticket-thread";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -23,7 +23,7 @@ export default async function TicketDetailPage({
     .maybeSingle();
 
   if (!ticket) notFound();
-  if (ticket.user_id !== user.id && user.role !== "admin") notFound();
+  if (ticket.user_id !== user.id && !isAdminProfile(user)) notFound();
 
   return (
     <div>
@@ -32,7 +32,7 @@ export default async function TicketDetailPage({
           <ArrowLeft /> Back to support
         </Link>
       </Button>
-      <TicketThread ticket={ticket} isAdmin={user.role === "admin"} />
+      <TicketThread ticket={ticket} isAdmin={isAdminProfile(user)} />
     </div>
   );
 }

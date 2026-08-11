@@ -39,11 +39,11 @@ export async function middleware(request: NextRequest) {
   if (user && isAdminRoute) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role")
+      .select("role, status")
       .eq("id", user.id)
       .maybeSingle();
 
-    if (!profile || profile.role !== "admin") {
+    if (!profile || profile.role !== "admin" || profile.status !== "active") {
       const url = request.nextUrl.clone();
       url.pathname = "/dashboard";
       return NextResponse.redirect(url);
