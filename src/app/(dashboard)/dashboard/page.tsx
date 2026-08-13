@@ -69,12 +69,12 @@ export default async function DashboardPage() {
       </PageHeader>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <StatCard title="Balance" value={formatCurrency(user.balance, user.currency)} icon={Wallet} color="primary" description="Available balance" />
-        <StatCard title="Today's Orders" value={todayOrdersRes.count ?? 0} icon={ShoppingBag} color="info" />
-        <StatCard title="Pending" value={pendingRes.count ?? 0} icon={Clock} color="warning" />
-        <StatCard title="Completed" value={completedRes.count ?? 0} icon={CheckCircle2} color="success" />
-        <StatCard title="Cancelled" value={cancelledRes.count ?? 0} icon={XCircle} color="destructive" />
-        <StatCard title="Total Spent" value={formatCurrency(totalSpent, user.currency)} icon={TrendingUp} color="info" />
+        <StatCard title="Balance" value={formatCurrency(user.balance, user.currency)} icon={<Wallet className="h-5 w-5" />} color="primary" description="Available balance" />
+        <StatCard title="Today's Orders" value={todayOrdersRes.count ?? 0} icon={<ShoppingBag className="h-5 w-5" />} color="info" />
+        <StatCard title="Pending" value={pendingRes.count ?? 0} icon={<Clock className="h-5 w-5" />} color="warning" />
+        <StatCard title="Completed" value={completedRes.count ?? 0} icon={<CheckCircle2 className="h-5 w-5" />} color="success" />
+        <StatCard title="Cancelled" value={cancelledRes.count ?? 0} icon={<XCircle className="h-5 w-5" />} color="destructive" />
+        <StatCard title="Total Spent" value={formatCurrency(totalSpent, user.currency)} icon={<TrendingUp className="h-5 w-5" />} color="info" />
       </div>
 
       <div className="mt-8">

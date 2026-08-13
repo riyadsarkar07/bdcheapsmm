@@ -1,13 +1,13 @@
 "use client";
 
+import * as React from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import type { LucideIcon } from "lucide-react";
 
 interface StatCardProps {
   title: string;
   value: string | number;
-  icon: LucideIcon;
+  icon?: React.ReactNode;
   description?: string;
   color?: "primary" | "success" | "warning" | "destructive" | "info";
   delay?: number;
@@ -25,7 +25,7 @@ const colorMap = {
 export function StatCard({
   title,
   value,
-  icon: Icon,
+  icon,
   description,
   color = "primary",
   delay = 0,
@@ -52,7 +52,7 @@ export function StatCard({
             colorMap[color]
           )}
         >
-          <Icon className="h-5 w-5" />
+          {icon}
         </div>
       </div>
     </motion.div>

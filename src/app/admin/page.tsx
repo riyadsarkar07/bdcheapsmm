@@ -86,19 +86,19 @@ export default async function AdminDashboardPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <StatCard title="Total Users" value={usersRes.count ?? 0} icon={Users} color="primary" description={`${newUsersToday.count ?? 0} new today`} />
-        <StatCard title="Total Orders" value={ordersRes.count ?? 0} icon={ShoppingCart} color="info" description={`${ordersToday.count ?? 0} today`} />
-        <StatCard title="Pending Orders" value={pendingOrders.count ?? 0} icon={Clock} color="warning" />
-        <StatCard title="Deposits (Pending)" value={pendingPayments.count ?? 0} icon={Banknote} color="destructive" />
-        <StatCard title="Open Tickets" value={openTickets.count ?? 0} icon={Ticket} color="warning" />
-        <StatCard title="Approved Revenue" value={formatCurrency(revenue)} icon={TrendingUp} color="success" />
+        <StatCard title="Total Users" value={usersRes.count ?? 0} icon={<Users className="h-5 w-5" />} color="primary" description={`${newUsersToday.count ?? 0} new today`} />
+        <StatCard title="Total Orders" value={ordersRes.count ?? 0} icon={<ShoppingCart className="h-5 w-5" />} color="info" description={`${ordersToday.count ?? 0} today`} />
+        <StatCard title="Pending Orders" value={pendingOrders.count ?? 0} icon={<Clock className="h-5 w-5" />} color="warning" />
+        <StatCard title="Deposits (Pending)" value={pendingPayments.count ?? 0} icon={<Banknote className="h-5 w-5" />} color="destructive" />
+        <StatCard title="Open Tickets" value={openTickets.count ?? 0} icon={<Ticket className="h-5 w-5" />} color="warning" />
+        <StatCard title="Approved Revenue" value={formatCurrency(revenue)} icon={<TrendingUp className="h-5 w-5" />} color="success" />
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Completed Orders" value={completedOrders.count ?? 0} icon={CheckCircle2} color="success" />
-        <StatCard title="Cancelled Orders" value={cancelledOrders.count ?? 0} icon={XCircle} color="destructive" />
-        <StatCard title="Active Services" value={activeServices.count ?? 0} icon={Layers} color="info" />
-        <StatCard title="Active Providers" value={activeProviders.count ?? 0} icon={Server} color="info" />
+        <StatCard title="Completed Orders" value={completedOrders.count ?? 0} icon={<CheckCircle2 className="h-5 w-5" />} color="success" />
+        <StatCard title="Cancelled Orders" value={cancelledOrders.count ?? 0} icon={<XCircle className="h-5 w-5" />} color="destructive" />
+        <StatCard title="Active Services" value={activeServices.count ?? 0} icon={<Layers className="h-5 w-5" />} color="info" />
+        <StatCard title="Active Providers" value={activeProviders.count ?? 0} icon={<Server className="h-5 w-5" />} color="info" />
       </div>
 
       <div className="mt-8 grid gap-6 xl:grid-cols-3">
