@@ -6,7 +6,6 @@ import { fail, ok, requireUser, isAdminProfile, type ActionResult } from "@/lib/
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { generateTicketNumber } from "@/lib/utils";
 import { writeLog } from "@/lib/audit";
-import { notifyAllAdmins } from "@/lib/notify";
 
 export async function createTicketAction(input: {
   subject: string;
@@ -44,19 +43,15 @@ export async function createTicketAction(input: {
 
   if (ticketError || !ticket) return fail("Failed to create ticket.");
 
-  await notifyAllAdmins({
-    type: "ticket_reply",
-    title: "New support ticket",
-    body: `${user.full_name ?? user.email} opened "${ticket.subject}"`,
-    link: `/admin/support/${ticket.id}`,
-  });
+  // The `notify_ticket_reply` trigger notifies all admins on the first message,
+  // so no manual broadcast is needed here.
 
   await writeLog({
     userId: user.id,
     action: "create",
     entityType: "tickets",
     entityId: ticket.id,
-    description: `Opened ticket #${ticketNumber}`,
+    description: `Opened ticket #${ticket.ticket_number}`,
     ip,
     userAgent: headerStore.get("user-agent"),
   });

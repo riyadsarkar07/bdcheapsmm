@@ -10,6 +10,10 @@ export interface ProviderServiceItem {
   type: string;
   average_time: string;
   description?: string;
+  /** Whether the provider allows refill/cancel for this service, plus drip-feed type. */
+  refill?: boolean | string;
+  cancel?: boolean | string;
+  driptype?: string;
 }
 
 export interface ProviderOrderResult {

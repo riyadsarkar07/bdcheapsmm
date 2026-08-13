@@ -435,7 +435,12 @@ export async function syncProviderServicesAction(providerId: string): Promise<Ac
         max_quantity: Number(item.max),
         average_time: item.average_time ?? null,
         type: serviceType,
-        meta: { provider_category: item.category },
+        meta: {
+          provider_category: item.category,
+          refill: item.refill ?? null,
+          cancel: item.cancel ?? null,
+          driptype: item.driptype ?? null,
+        },
       };
 
       const { data: existingService } = await supabase

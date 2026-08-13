@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/form";
 import { createOrderAction } from "@/lib/actions/orders";
 import { formatCurrency } from "@/lib/utils";
+import { computeOrderCharge } from "@/lib/pricing";
 
 const formSchema = z.object({
   quantity: z.coerce
@@ -37,11 +38,13 @@ const formSchema = z.object({
 interface OrderFormProps {
   serviceId: string;
   serviceName: string;
+  /** Retail price per 1000 units (same as the provider rate + markup). */
   pricePerUnit: number;
   minQuantity: number;
   maxQuantity: number;
   currency: string;
   balance: number;
+  linkPlaceholder?: string;
 }
 
 export function OrderForm({
@@ -52,6 +55,7 @@ export function OrderForm({
   maxQuantity,
   currency,
   balance,
+  linkPlaceholder,
 }: OrderFormProps) {
   const router = useRouter();
   const [loading, setLoading] = React.useState(false);
@@ -65,8 +69,8 @@ export function OrderForm({
   });
 
   const quantity = form.watch("quantity") || 0;
-  const rawTotal = quantity * pricePerUnit;
-  const total = rawTotal;
+  // pricePerUnit is per 1000 units, so the total is (price/1000) x quantity.
+  const total = computeOrderCharge(pricePerUnit, quantity);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setLoading(true);
@@ -135,7 +139,7 @@ export function OrderForm({
                 <FormLabel>Link</FormLabel>
                 <FormControl>
                   <Input
-                    placeholder="https://www.instagram.com/p/..."
+                    placeholder={linkPlaceholder ?? "https://www.instagram.com/p/..."}
                     {...field}
                   />
                 </FormControl>
@@ -178,7 +182,7 @@ export function OrderForm({
 
           <div className="rounded-lg bg-muted/60 p-4">
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Price</span>
+              <span className="text-muted-foreground">Rate (per 1k)</span>
               <span>
                 {formatCurrency(pricePerUnit, currency)} × {quantity.toLocaleString()}
               </span>

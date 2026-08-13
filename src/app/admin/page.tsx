@@ -51,14 +51,14 @@ export default async function AdminDashboardPage() {
     supabase.from("orders").select("id", { count: "exact", head: true }).in("status", ["pending", "processing", "in_progress"]),
     supabase.from("orders").select("id", { count: "exact", head: true }).eq("status", "completed"),
     supabase.from("orders").select("id", { count: "exact", head: true }).eq("status", "cancelled"),
-    supabase.from("transactions").select("amount").eq("type", "deposit"),
+    supabase.from("transactions").select("amount").eq("type", "order_deduction"),
     supabase.from("payment_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
     supabase.from("tickets").select("id", { count: "exact", head: true }).in("status", ["open", "waiting"]),
     supabase.from("services").select("id", { count: "exact", head: true }).eq("is_active", true),
     supabase.from("providers").select("id", { count: "exact", head: true }).eq("status", "active"),
   ]);
 
-  const revenue = (revenueRes.data ?? []).reduce((s, t) => s + Number(t.amount), 0);
+  const revenue = (revenueRes.data ?? []).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
 
   const [recentOrders, recentPayments, recentUsers] = await Promise.all([
     supabase
@@ -91,7 +91,7 @@ export default async function AdminDashboardPage() {
         <StatCard title="Pending Orders" value={pendingOrders.count ?? 0} icon={<Clock className="h-5 w-5" />} color="warning" />
         <StatCard title="Deposits (Pending)" value={pendingPayments.count ?? 0} icon={<Banknote className="h-5 w-5" />} color="destructive" />
         <StatCard title="Open Tickets" value={openTickets.count ?? 0} icon={<Ticket className="h-5 w-5" />} color="warning" />
-        <StatCard title="Approved Revenue" value={formatCurrency(revenue)} icon={<TrendingUp className="h-5 w-5" />} color="success" />
+        <StatCard title="Total Revenue" value={formatCurrency(revenue)} icon={<TrendingUp className="h-5 w-5" />} color="success" description="From all order charges" />
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

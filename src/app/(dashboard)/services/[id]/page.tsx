@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Clock, Minus, Plus, Info } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { detectPlatform, exampleLinkForPlatform } from "@/lib/pricing";
 
 export default async function ServiceOrderPage({
   params,
@@ -121,6 +122,9 @@ export default async function ServiceOrderPage({
             maxQuantity={service.max_quantity}
             currency={user.currency}
             balance={user.balance}
+            linkPlaceholder={exampleLinkForPlatform(
+              detectPlatform(service.categories?.name, service.categories?.slug)
+            )}
           />
         </div>
       </div>

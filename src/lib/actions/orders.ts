@@ -6,13 +6,10 @@ import { fail, ok, requireUser, isAdminProfile, type ActionResult } from "@/lib/
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { generateOrderNumber } from "@/lib/utils";
 import { providerApi } from "@/lib/provider/smmfollow";
+import { computeOrderCharge, round2 } from "@/lib/pricing";
 import { writeLog } from "@/lib/audit";
 import { createNotification } from "@/lib/notify";
 import type { OrderStatus } from "@/lib/types/database";
-
-function round2(value: number): number {
-  return Math.round(value * 100) / 100;
-}
 
 export async function createOrderAction(input: {
   serviceId: string;
@@ -63,7 +60,9 @@ export async function createOrderAction(input: {
     );
   }
 
-  let price = round2(service.price * qty);
+  // `services.price` is the retail price per 1000 units (same as the provider
+  // rate + markup), so the charge is (price/1000) x quantity - never price x quantity.
+  let price = computeOrderCharge(service.price, qty);
   let couponDiscount = 0;
 
   // Optional coupon
