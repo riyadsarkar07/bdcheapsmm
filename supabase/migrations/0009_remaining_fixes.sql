@@ -2,7 +2,11 @@
 -- BD Cheap SMM - Remaining production fixes
 --
 -- Safe to run on any deployed database (all statements are idempotent).
--- Run this AFTER 0008 (or alone; it re-asserts everything critical).
+-- Requires the base schema from 0001-0008 to be present. It may be run via
+-- the Supabase SQL Editor on a deployed DB that already has 0001-0008 applied,
+-- or as part of the full migration chain (0001 -> 0009) via `supabase db push`.
+-- Do NOT run on an empty database; the self-healing ALTERs below assume the
+-- base tables already exist.
 --
 --  1. Self-heal columns the app relies on (heals deployed-DB drift).
 --  2. DB-side unique ticket numbers (TKT-YYYYMMDD-NNNN) + atomic create/reply.
