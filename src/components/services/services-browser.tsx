@@ -4,7 +4,7 @@ import * as React from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, formatUsd } from "@/lib/utils";
 import { motion } from "framer-motion";
 import {
   Search,
@@ -353,7 +353,7 @@ export function ServicesBrowser() {
             />
           </div>
           <div className="lg:col-span-3">
-            <ServiceDetails service={selected} platform={selectedPlatform} currency={profile?.currency ?? "BDT"} />
+            <ServiceDetails service={selected} platform={selectedPlatform} />
           </div>
         </div>
       ) : null}
@@ -433,7 +433,7 @@ export function ServicesBrowser() {
                 <div className="mt-4 flex items-center justify-between border-t pt-3">
                   <div>
                     <p className="text-lg font-bold text-primary">
-                      {formatCurrency(service.price, profile?.currency ?? "BDT")}
+                      {formatUsd(service.price)}
                       <span className="text-xs font-normal text-muted-foreground"> / 1k</span>
                     </p>
                   </div>
@@ -481,15 +481,17 @@ function DetailRow({
 function ServiceDetails({
   service,
   platform,
-  currency,
 }: {
   service: SelectedService;
   platform: string;
-  currency: string;
 }) {
   const meta = parseMeta(service.meta);
   const refill = yesNo(meta.refill);
   const cancel = yesNo(meta.cancel);
+  const driptype =
+    typeof meta.driptype === "string" && meta.driptype ? meta.driptype : null;
+  const guarantee =
+    typeof meta.guarantee === "string" && meta.guarantee ? meta.guarantee : null;
 
   return (
     <div className="glass-card rounded-xl p-6">
@@ -502,6 +504,11 @@ function ServiceDetails({
             {PLATFORM_LABELS[platform] ?? platform}
           </p>
           <h2 className="text-lg font-bold leading-snug">{service.name}</h2>
+          {service.providers ? (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Provider: {service.providers.name}
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -512,7 +519,7 @@ function ServiceDetails({
             value={service.provider_service_id ?? "—"}
             mono
           />
-          <DetailRow label="Rate / 1k" value={formatCurrency(service.price, currency)} />
+          <DetailRow label="Rate / 1k" value={formatUsd(service.price)} />
           <DetailRow
             label="Example Link"
             value={
@@ -522,18 +529,14 @@ function ServiceDetails({
             }
           />
           <DetailRow label="Start Time" value={service.average_time ?? "—"} />
-          <DetailRow label="Speed" value="—" />
+          <DetailRow label="Speed / Drip" value={driptype ?? "—"} />
         </div>
         <div>
-          <DetailRow label="Guarantee" value="—" />
-          <DetailRow label="Quality" value="—" />
           <DetailRow label="Refill" value={refill} />
           <DetailRow label="Cancel" value={cancel} />
-          <DetailRow label="Drop" value="—" />
-          <DetailRow
-            label="Min – Max"
-            value={`${service.min_quantity.toLocaleString()} – ${service.max_quantity.toLocaleString()}`}
-          />
+          <DetailRow label="Min – Max" value={`${service.min_quantity.toLocaleString()} – ${service.max_quantity.toLocaleString()}`} />
+          <DetailRow label="Type" value={service.type ?? "standard"} />
+          {guarantee ? <DetailRow label="Guarantee" value={guarantee} /> : null}
         </div>
       </div>
 
@@ -547,7 +550,6 @@ function ServiceDetails({
         <Badge variant="secondary">
           <Hash className="mr-1 h-3 w-3" /> {service.type ?? "standard"}
         </Badge>
-        {service.providers ? <Badge variant="secondary">Provider: {service.providers.name}</Badge> : null}
         {service.is_featured ? <Badge variant="info">Featured</Badge> : null}
       </div>
     </div>

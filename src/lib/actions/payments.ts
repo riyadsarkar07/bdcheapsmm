@@ -88,7 +88,11 @@ export async function submitPaymentAction(input: {
     .single();
 
   if (insertError || !payment) {
-    return fail("Failed to submit payment request.");
+    return fail(
+      insertError
+        ? `Failed to submit payment request: ${insertError.message}`
+        : "Failed to submit payment request."
+    );
   }
 
   await writeLog({

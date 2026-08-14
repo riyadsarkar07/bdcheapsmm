@@ -97,7 +97,8 @@ export function AdminTransactions({ transactions }: { transactions: TransactionR
                 </thead>
                 <tbody>
                   {filtered.map((transaction) => {
-                    const isCredit = transaction.type === "deposit" || transaction.type === "refund";
+                    const signed = Number(transaction.amount) || 0;
+                    const isCredit = signed >= 0;
                     return (
                       <tr key={transaction.id} className="border-b last:border-0 hover:bg-muted/50">
                         <td className="max-w-[160px] px-4 py-3">
@@ -113,7 +114,7 @@ export function AdminTransactions({ transactions }: { transactions: TransactionR
                         <td className="px-4 py-3 text-right font-semibold">
                           <span className={isCredit ? "text-success" : "text-destructive"}>
                             {isCredit ? "+" : "−"}
-                            {formatCurrency(transaction.amount, transaction.currency)}
+                            {formatCurrency(Math.abs(signed), transaction.currency)}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right text-muted-foreground">

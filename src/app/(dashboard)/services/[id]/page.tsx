@@ -7,7 +7,7 @@ import { CategoryIcon } from "@/components/category-icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Clock, Minus, Plus, Info } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { formatUsd } from "@/lib/utils";
 import { detectPlatform, exampleLinkForPlatform } from "@/lib/pricing";
 
 export default async function ServiceOrderPage({
@@ -58,7 +58,7 @@ export default async function ServiceOrderPage({
               <div className="rounded-lg bg-muted/60 p-3">
                 <p className="text-xs text-muted-foreground">Price / 1k</p>
                 <p className="mt-0.5 text-lg font-bold text-primary">
-                  {formatCurrency(service.price, user.currency)}
+                  {formatUsd(service.price)}
                 </p>
               </div>
               <div className="rounded-lg bg-muted/60 p-3">

@@ -69,6 +69,7 @@ export default async function AdminDashboardPage() {
     supabase
       .from("payment_requests")
       .select("id, user_id, profiles(full_name, email), method, amount, currency, status, created_at")
+      .eq("status", "pending")
       .order("created_at", { ascending: false })
       .limit(6),
     supabase

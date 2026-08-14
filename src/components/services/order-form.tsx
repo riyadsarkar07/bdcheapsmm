@@ -19,7 +19,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { createOrderAction } from "@/lib/actions/orders";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatUsd } from "@/lib/utils";
 import { computeOrderCharge } from "@/lib/pricing";
 
 const formSchema = z.object({
@@ -184,13 +184,13 @@ export function OrderForm({
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Rate (per 1k)</span>
               <span>
-                {formatCurrency(pricePerUnit, currency)} × {quantity.toLocaleString()}
+                {formatUsd(pricePerUnit)} × {quantity.toLocaleString()}
               </span>
             </div>
             <div className="mt-2 flex items-center justify-between border-t pt-2">
               <span className="font-medium">Total</span>
               <span className="text-xl font-bold text-primary">
-                {formatCurrency(total, currency)}
+                {formatUsd(total)}
               </span>
             </div>
             <div className="mt-2 flex items-center justify-between text-xs">

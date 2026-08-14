@@ -14,8 +14,7 @@ import {
 } from "@/lib/validations";
 import { fail, ok, requireAdmin, type ActionResult } from "@/lib/guards";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
-import { providerApi } from "@/lib/provider/smmfollow";
-import { parseServiceType } from "@/lib/provider/smmfollow";
+import { providerApi, parseServiceType } from "@/lib/provider/smmfollow";
 import { slugify } from "@/lib/utils";
 import { writeLog } from "@/lib/audit";
 import { createNotification, notifyAllAdmins } from "@/lib/notify";
@@ -249,11 +248,13 @@ export async function previewGlobalProfitAction(input: { profitPercentage: numbe
 
   const { createClient } = await import("@/lib/supabase/server");
   const supabase = await createClient();
-  const { data: services } = await supabase
+  const { data: services, count } = await supabase
     .from("services")
-    .select("id, name, price, provider_price")
+    .select("id, name, price, provider_price", { count: "exact", head: false })
     .eq("pricing_mode", "global")
-    .not("provider_price", "is", null);
+    .not("provider_price", "is", null)
+    .order("name", { ascending: true })
+    .limit(50);
 
   if (!services) return fail("Failed to load services.");
 
@@ -262,7 +263,7 @@ export async function previewGlobalProfitAction(input: { profitPercentage: numbe
     return { id: s.id, name: s.name, price: s.price, newPrice, providerPrice: s.provider_price! };
   });
 
-  return ok({ total: preview.length, preview });
+  return ok({ total: count ?? 0, preview });
 }
 
 export async function applyGlobalProfitAction(input: { profitPercentage: number; rounding: "round2" | "round" | "ceil" }): Promise<
@@ -273,21 +274,18 @@ export async function applyGlobalProfitAction(input: { profitPercentage: number;
 
   const { createClient } = await import("@/lib/supabase/server");
   const supabase = await createClient();
-  const { data: services } = await supabase
-    .from("services")
-    .select("id, provider_price")
-    .eq("pricing_mode", "global")
-    .not("provider_price", "is", null);
 
-  if (!services) return fail("Failed to load services.");
+  // The whole update runs inside a single `apply_global_profit` RPC so it
+  // completes in one database round-trip instead of one UPDATE per service
+  // (which exceeded the serverless function duration and left the UI stuck on
+  // "loading").
+  const { data, error: rpcError } = await supabase.rpc("apply_global_profit", {
+    p_percentage: input.profitPercentage,
+    p_rounding: input.rounding,
+  });
+  if (rpcError) return fail(`Failed to apply pricing: ${rpcError.message}`);
 
-  for (const service of services) {
-    const newPrice = applyRounding(computeRetailPrice(service.provider_price!, input.profitPercentage), input.rounding);
-    await supabase.from("services").update({
-      price: newPrice,
-      profit_margin: input.profitPercentage,
-    }).eq("id", service.id);
-  }
+  const updated = typeof data === "number" ? data : Number(data ?? 0);
 
   await setSetting("pricing", {
     global_profit_percentage: input.profitPercentage,
@@ -298,9 +296,9 @@ export async function applyGlobalProfitAction(input: { profitPercentage: number;
     userId: user.id,
     action: "update",
     entityType: "services",
-    description: `Applied global profit ${input.profitPercentage}% (${input.rounding}) to ${services.length} global-markup services`,
+    description: `Applied global profit ${input.profitPercentage}% (${input.rounding}) to ${updated} global-markup services`,
   });
-  return ok({ updated: services.length }, `Applied global profit to ${services.length} services.`);
+  return ok({ updated }, `Applied global profit to ${updated} services.`);
 }
 
 function applyRounding(value: number, rounding: "round2" | "round" | "ceil"): number {
@@ -390,112 +388,49 @@ export async function syncProviderServicesAction(providerId: string): Promise<Ac
 
   try {
     const items = await providerApi.getServices(provider);
-    await supabase.from("providers").update({ balance: null, last_sync_at: new Date().toISOString(), sync_status: "done", sync_message: `Found ${items.length} services.` }).eq("id", providerId);
 
-    // Map provider categories
-    const categoryCache = new Map<string, string | null>();
-    const { data: categories } = await supabase.from("categories").select("id, slug, name");
+    // Build the payload once; the insert/update of every service happens inside
+    // the `sync_provider_services` RPC (one DB round-trip) so syncing ~1.7k
+    // services finishes well within the serverless function limit.
+    const payload = items.map((item) => ({
+      service: String(item.service),
+      name: item.name,
+      category: item.category,
+      category_slug: slugify(item.category),
+      rate: Number(item.rate),
+      min: Number(item.min),
+      max: Number(item.max),
+      average_time: item.average_time ?? null,
+      type: parseServiceType(item.type + " " + item.name),
+      description: item.description ?? null,
+      refill: item.refill ?? null,
+      cancel: item.cancel ?? null,
+      driptype: item.driptype ?? null,
+    }));
 
-    let imported = 0;
-    let updated = 0;
+    const { data, error: rpcError } = await supabase.rpc("sync_provider_services", {
+      p_provider_id: providerId,
+      p_items: payload as never,
+    });
 
-    for (const item of items) {
-      let categoryId: string | null = null;
-      const catSlug = slugify(item.category);
-      if (catSlug) {
-        if (categoryCache.has(catSlug)) {
-          categoryId = categoryCache.get(catSlug)!;
-        } else {
-          const existing = categories?.find((c) => c.slug === catSlug || c.name.toLowerCase() === item.category.toLowerCase());
-          if (existing) {
-            categoryId = existing.id;
-          } else {
-            const { data: newCat } = await supabase.from("categories").insert({
-              name: item.category,
-              slug: catSlug,
-              description: `Auto-imported category: ${item.category}`,
-            }).select("id").single();
-            categoryId = newCat?.id ?? null;
-          }
-          categoryCache.set(catSlug, categoryId);
-        }
-      }
-
-      const providerPrice = round2(Number(item.rate));
-      const serviceType = parseServiceType(item.type + " " + item.name);
-      const payload = {
-        category_id: categoryId,
-        provider_id: provider.id,
-        provider_service_id: String(item.service),
-        name: item.name,
-        slug: `${provider.id.slice(0, 8)}-${item.service}`,
-        description: item.description ?? null,
-        provider_price: providerPrice,
-        min_quantity: Number(item.min),
-        max_quantity: Number(item.max),
-        average_time: item.average_time ?? null,
-        type: serviceType,
-        meta: {
-          provider_category: item.category,
-          refill: item.refill ?? null,
-          cancel: item.cancel ?? null,
-          driptype: item.driptype ?? null,
-        },
-      };
-
-      const { data: existingService } = await supabase
-        .from("services")
-        .select("id, price, profit_margin, pricing_mode")
-        .eq("provider_id", provider.id)
-        .eq("provider_service_id", String(item.service))
-        .maybeSingle();
-
-      if (existingService) {
-        if (existingService.pricing_mode === "custom") {
-          // Preserve the manually-set price and local category; refresh everything else.
-          await supabase.from("services").update({
-            name: payload.name,
-            description: payload.description,
-            provider_price: payload.provider_price,
-            min_quantity: payload.min_quantity,
-            max_quantity: payload.max_quantity,
-            average_time: payload.average_time,
-            type: payload.type,
-            meta: payload.meta,
-            is_active: true,
-          }).eq("id", existingService.id);
-        } else {
-          // Preserve the local category override; refresh provider fields.
-          await supabase.from("services").update({
-            ...payload,
-            category_id: undefined,
-            price: computeRetailPrice(providerPrice, existingService.profit_margin),
-          }).eq("id", existingService.id);
-        }
-        updated++;
-      } else {
-        await supabase.from("services").insert({
-          ...payload,
-          price: computeRetailPrice(providerPrice, 20),
-          profit_margin: 20,
-          pricing_mode: "global",
-          is_active: true,
-        });
-        imported++;
-      }
+    if (rpcError) {
+      await supabase.from("providers").update({ sync_status: "error", sync_message: rpcError.message }).eq("id", providerId);
+      return fail(`Sync failed: ${rpcError.message}`);
     }
 
-    // Disable provider services that no longer exist upstream (never delete).
-    const providerServiceIds = items.map((item) => String(item.service));
-    const { data: staleServices } = await supabase
-      .from("services")
-      .select("id, provider_service_id")
-      .eq("provider_id", provider.id);
-    for (const stale of staleServices ?? []) {
-      if (stale.provider_service_id && !providerServiceIds.includes(stale.provider_service_id)) {
-        await supabase.from("services").update({ is_active: false }).eq("id", stale.id);
-      }
-    }
+    const first = Array.isArray(data) ? data[0] : data;
+    const imported = Number(first?.imported ?? 0);
+    const updated = Number(first?.updated ?? 0);
+
+    await supabase
+      .from("providers")
+      .update({
+        balance: null,
+        last_sync_at: new Date().toISOString(),
+        sync_status: "done",
+        sync_message: `${items.length} services found. ${imported} imported, ${updated} updated.`,
+      })
+      .eq("id", providerId);
 
     await writeLog({
       userId: user.id,
@@ -503,9 +438,9 @@ export async function syncProviderServicesAction(providerId: string): Promise<Ac
       entityType: "providers",
       entityId: provider.id,
       description: `Synced provider ${provider.name}: ${imported} imported, ${updated} updated`,
-      meta: { imported, updated },
+      meta: { imported, updated, total: items.length },
     });
-    return ok({ imported, updated }, `Synced: ${imported} new, ${updated} updated.`);
+    return ok({ imported, updated }, `Synced: ${imported} new, ${updated} updated (${items.length} total).`);
   } catch (err) {
     await supabase.from("providers").update({ sync_status: "error", sync_message: (err as Error).message }).eq("id", providerId);
     return fail((err as Error).message);

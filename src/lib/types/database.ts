@@ -547,6 +547,14 @@ export type Database = {
         };
         Returns: undefined;
       };
+      apply_global_profit: {
+        Args: { p_percentage: number; p_rounding: string };
+        Returns: number;
+      };
+      sync_provider_services: {
+        Args: { p_provider_id: string; p_items: unknown };
+        Returns: { imported: number; updated: number }[];
+      };
     };
     Enums: {
       app_role: AppRole;

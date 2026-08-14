@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/empty-state";
 import { applyGlobalProfitAction, previewGlobalProfitAction } from "@/lib/actions/admin";
-import { formatCurrency } from "@/lib/utils";
+import { formatUsd } from "@/lib/utils";
 
 type Rounding = "round2" | "round" | "ceil";
 
@@ -51,6 +51,7 @@ export function AdminPricing({
   const [profit, setProfit] = React.useState(initialGlobalProfit?.toString() ?? "");
   const [rounding, setRounding] = React.useState<Rounding>(initialRounding);
   const [preview, setPreview] = React.useState<PreviewRow[] | null>(null);
+  const [previewTotal, setPreviewTotal] = React.useState<number | null>(null);
   const [previewing, setPreviewing] = React.useState(false);
   const [applying, setApplying] = React.useState(false);
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -67,6 +68,7 @@ export function AdminPricing({
       const result = await previewGlobalProfitAction({ profitPercentage: parsedProfit, rounding });
       if (result.success) {
         setPreview(result.data?.preview ?? []);
+        setPreviewTotal(result.data?.total ?? null);
         setDialogOpen(true);
       } else {
         toast.error(result.error ?? "Preview failed");
@@ -171,8 +173,13 @@ export function AdminPricing({
           <DialogHeader>
             <DialogTitle>Preview Global Profit</DialogTitle>
             <DialogDescription>
-              {preview?.length ?? 0} global-markup service(s) will change. Custom-price services are
+              {previewTotal ?? 0} global-markup service(s) will change. Custom-price services are
               excluded.
+              {previewTotal !== null && previewTotal > (preview?.length ?? 0) ? (
+                <span className="mt-1 block text-muted-foreground">
+                  Showing the first {preview?.length ?? 0} services as a preview.
+                </span>
+              ) : null}
             </DialogDescription>
           </DialogHeader>
 
@@ -190,9 +197,9 @@ export function AdminPricing({
                   {preview.map((row) => (
                     <tr key={row.id} className="border-b last:border-0">
                       <td className="max-w-[220px] truncate px-3 py-2">{row.name}</td>
-                      <td className="px-3 py-2 text-right">{formatCurrency(row.price, "BDT")}</td>
+                      <td className="px-3 py-2 text-right">{formatUsd(row.price)}</td>
                       <td className="px-3 py-2 text-right font-semibold text-primary">
-                        {formatCurrency(row.newPrice, "BDT")}
+                        {formatUsd(row.newPrice)}
                       </td>
                     </tr>
                   ))}
@@ -207,9 +214,9 @@ export function AdminPricing({
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button variant="gradient" onClick={handleApply} disabled={applying || (preview?.length ?? 0) === 0}>
+            <Button variant="gradient" onClick={handleApply} disabled={applying || (previewTotal ?? 0) === 0}>
               {applying ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
-              Apply to {preview?.length ?? 0} services
+              Apply to {previewTotal ?? 0} services
             </Button>
           </DialogFooter>
         </DialogContent>

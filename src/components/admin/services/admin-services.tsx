@@ -50,7 +50,7 @@ import {
   bulkDeleteServicesAction,
   bulkPriceUpdateAction,
 } from "@/lib/actions/admin";
-import { formatCurrency } from "@/lib/utils";
+import { formatUsd } from "@/lib/utils";
 
 type ServiceRow = {
   id: string;
@@ -257,10 +257,10 @@ export function AdminServices({
                           </p>
                         </td>
                         <td className="px-4 py-3 text-right font-semibold text-primary">
-                          {formatCurrency(service.price, "BDT")}
+                          {formatUsd(service.price)}
                         </td>
                         <td className="px-4 py-3 text-right text-muted-foreground">
-                          {service.provider_price != null ? formatCurrency(service.provider_price, "BDT") : "—"}
+                          {service.provider_price != null ? formatUsd(service.provider_price) : "—"}
                         </td>
                         <td className="px-4 py-3 text-right">{service.profit_margin}%</td>
                         <td className="px-4 py-3 text-right">

@@ -10,10 +10,21 @@ export default async function AdminSupportPage() {
   if (error || !user) return null;
 
   const supabase = await createClient();
-  const { data: tickets } = await supabase
+  const { data: tickets, error: queryError } = await supabase
     .from("tickets")
     .select("*, profiles(full_name, email, avatar_url)")
     .order("last_message_at", { ascending: false });
+
+  if (queryError) {
+    return (
+      <div>
+        <PageHeader title="Support Tickets" description="Read and reply to user support requests." />
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          Failed to load support tickets: {queryError.message}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

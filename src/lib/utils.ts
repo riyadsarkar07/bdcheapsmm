@@ -31,6 +31,17 @@ export function formatNumber(value: number | string | null | undefined): string 
   return num.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
+/**
+ * Format an amount as USD. Service rates and order prices are always quoted in
+ * USD (the SMMFollowOM provider currency) regardless of the account's display
+ * currency, so this is used for every service/order price shown anywhere.
+ */
+export function formatUsd(amount: number | string | null | undefined): string {
+  const value = Number(amount ?? 0);
+  if (Number.isNaN(value)) return "$0.00";
+  return "$" + value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export function formatDate(
   date: string | Date | null | undefined,
   pattern = "MMM d, yyyy"

@@ -41,7 +41,13 @@ export async function createTicketAction(input: {
     }
   );
 
-  if (ticketError || !ticket) return fail("Failed to create ticket.");
+  if (ticketError || !ticket) {
+    return fail(
+      ticketError
+        ? `Failed to create ticket: ${ticketError.message}`
+        : "Failed to create ticket. Please try again."
+    );
+  }
 
   // The `notify_ticket_reply` trigger notifies all admins on the first message,
   // so no manual broadcast is needed here.
@@ -96,7 +102,7 @@ export async function replyTicketAction(input: {
     p_is_staff: isStaff,
   });
 
-  if (msgError) return fail("Failed to send message.");
+  if (msgError) return fail(`Failed to send message: ${msgError.message}`);
 
   if (isStaff) {
     await writeLog({
