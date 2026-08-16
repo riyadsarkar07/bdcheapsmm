@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Layers } from "lucide-react";
-import { formatCurrency, formatDateTime, truncate } from "@/lib/utils";
+import { formatUsd, formatDateTime, truncate } from "@/lib/utils";
 import type { OrderStatus } from "@/lib/types/database";
 
 export const revalidate = 0;
@@ -105,7 +105,7 @@ export default async function OrdersPage({
                         <span className="line-clamp-1">{truncate(order.services?.name ?? "Service", 50)}</span>
                       </td>
                       <td className="px-4 py-3 text-right">{order.quantity.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right font-medium">{formatCurrency(order.price, order.currency)}</td>
+                      <td className="px-4 py-3 text-right font-medium">{formatUsd(order.price)}</td>
                       <td className="px-4 py-3">
                         <OrderStatusBadge status={order.status as OrderStatus} />
                       </td>

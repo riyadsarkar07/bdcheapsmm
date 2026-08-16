@@ -15,7 +15,7 @@ import {
 import { fail, ok, requireAdmin, type ActionResult } from "@/lib/guards";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { providerApi, parseServiceType } from "@/lib/provider/smmfollow";
-import { slugify } from "@/lib/utils";
+import { slugify, formatUsd } from "@/lib/utils";
 import { writeLog } from "@/lib/audit";
 import { createNotification, notifyAllAdmins } from "@/lib/notify";
 import { setSetting } from "@/lib/settings";
@@ -820,7 +820,7 @@ export async function adminRefundOrderAction(orderId: string): Promise<ActionRes
     userId: order.user_id,
     type: "order_cancelled",
     title: "Order refunded",
-    body: `Order #${order.order_number} was refunded ${order.price.toLocaleString()} ${order.currency}.`,
+    body: `Order #${order.order_number} was refunded ${formatUsd(order.price)}.`,
     link: `/orders/${order.id}`,
   });
   await writeLog({ userId: user.id, action: "update", entityType: "orders", entityId: orderId, description: `Refunded order #${order.order_number}` });

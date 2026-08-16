@@ -17,7 +17,7 @@ import {
   Layers,
   TrendingUp,
 } from "lucide-react";
-import { formatCurrency, formatDateTime, truncate } from "@/lib/utils";
+import { formatCurrency, formatUsd, formatDateTime, truncate } from "@/lib/utils";
 import type { OrderStatus } from "@/lib/types/database";
 
 export default async function DashboardPage() {
@@ -126,7 +126,7 @@ export default async function DashboardPage() {
                           <span className="line-clamp-1">{truncate(order.services?.name ?? "Service", 40)}</span>
                         </td>
                         <td className="px-4 py-3">{order.quantity.toLocaleString()}</td>
-                        <td className="px-4 py-3 font-medium">{formatCurrency(order.price, order.currency)}</td>
+                        <td className="px-4 py-3 font-medium">{formatUsd(order.price)}</td>
                         <td className="px-4 py-3">
                           <OrderStatusBadge status={order.status as OrderStatus} />
                         </td>

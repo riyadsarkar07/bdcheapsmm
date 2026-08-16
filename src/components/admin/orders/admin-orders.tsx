@@ -28,7 +28,7 @@ import {
   refillOrderAction,
   retryFailedOrderAction,
 } from "@/lib/actions/orders";
-import { formatCurrency, formatDateTime, truncate } from "@/lib/utils";
+import { formatUsd, formatDateTime, truncate } from "@/lib/utils";
 import type { OrderStatus } from "@/lib/types/database";
 
 type OrderRow = {
@@ -207,7 +207,7 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                         <span className="line-clamp-1">{truncate(order.services?.name ?? "—", 30)}</span>
                       </td>
                       <td className="px-4 py-3 text-right">{order.quantity.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right font-medium">{formatCurrency(order.price, order.currency)}</td>
+                      <td className="px-4 py-3 text-right font-medium">{formatUsd(order.price)}</td>
                       <td className="px-4 py-3">
                         <OrderStatusBadge status={order.status} />
                       </td>

@@ -19,7 +19,7 @@ import {
   XCircle,
   TrendingUp,
 } from "lucide-react";
-import { formatCurrency, formatDateTime, truncate } from "@/lib/utils";
+import { formatCurrency, formatUsd, formatDateTime, truncate } from "@/lib/utils";
 import type { OrderStatus, PaymentStatus } from "@/lib/types/database";
 
 export default async function AdminDashboardPage() {
@@ -139,7 +139,7 @@ export default async function AdminDashboardPage() {
                           <td className="max-w-[180px] px-4 py-3">
                             <span className="line-clamp-1">{truncate(order.services?.name ?? "—", 30)}</span>
                           </td>
-                          <td className="px-4 py-3 text-right font-medium">{formatCurrency(order.price, order.currency)}</td>
+                          <td className="px-4 py-3 text-right font-medium">{formatUsd(order.price)}</td>
                           <td className="px-4 py-3">
                             <OrderStatusBadge status={order.status as OrderStatus} />
                           </td>

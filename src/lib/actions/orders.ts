@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { createOrderSchema } from "@/lib/validations";
 import { fail, ok, requireUser, isAdminProfile, type ActionResult } from "@/lib/guards";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
-import { generateOrderNumber } from "@/lib/utils";
+import { generateOrderNumber, formatUsd } from "@/lib/utils";
 import { providerApi } from "@/lib/provider/smmfollow";
 import { computeOrderCharge, round2 } from "@/lib/pricing";
 import { writeLog } from "@/lib/audit";
@@ -254,7 +254,7 @@ export async function cancelOrderAction(orderId: string): Promise<ActionResult> 
       userId: user.id,
       type: "order_cancelled",
       title: "Order cancelled",
-      body: `Order #${order.order_number} was cancelled. ${order.price.toLocaleString()} ${order.currency} refunded.`,
+      body: `Order #${order.order_number} was cancelled. ${formatUsd(order.price)} refunded.`,
       link: `/orders/${order.id}`,
     });
     return ok(undefined, "Order cancelled and refunded.");
@@ -290,7 +290,7 @@ export async function cancelOrderAction(orderId: string): Promise<ActionResult> 
     title: "Order cancelled",
     body: refundError
       ? `Order #${order.order_number} was cancelled but refund failed: ${refundError.message}. Contact support.`
-      : `Order #${order.order_number} was cancelled. ${order.price.toLocaleString()} ${order.currency} refunded.`,
+      : `Order #${order.order_number} was cancelled. ${formatUsd(order.price)} refunded.`,
     link: `/orders/${order.id}`,
   });
 

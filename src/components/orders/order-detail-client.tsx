@@ -29,7 +29,7 @@ import {
   refillOrderAction,
   retryFailedOrderAction,
 } from "@/lib/actions/orders";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { formatUsd, formatDateTime } from "@/lib/utils";
 import type { Order } from "@/lib/types/database";
 import type { OrderStatus } from "@/lib/types/database";
 
@@ -87,7 +87,7 @@ export function OrderDetailClient({
     { label: "Order Number", value: `#${orderState.order_number}`, copy: orderState.order_number },
     { label: "Service", value: orderState.services?.name ?? "—" },
     { label: "Quantity", value: orderState.quantity.toLocaleString() },
-    { label: "Price", value: formatCurrency(orderState.price, orderState.currency) },
+    { label: "Price", value: formatUsd(orderState.price) },
     { label: "Provider Order ID", value: orderState.provider_order_id ?? "—", copy: orderState.provider_order_id ?? undefined },
     { label: "Provider", value: providerName ?? "—" },
     { label: "Start Count", value: orderState.start_count?.toLocaleString() ?? "—" },
