@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
@@ -38,7 +37,6 @@ export function TicketThread({
   ticket: Ticket;
   isAdmin: boolean;
 }) {
-  const router = useRouter();
   const supabase = createClient();
   const [messages, setMessages] = React.useState<MessageWithUser[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -80,10 +78,9 @@ export function TicketThread({
             .eq("id", newMessage.user_id)
             .maybeSingle();
           setMessages((prev) => [...prev, { ...newMessage, profiles: sender }]);
-          // Auto-refresh status when admin replies
+          // Auto-refresh status when admin replies (no full page reload)
           if (newMessage.is_staff) {
             setStatus("open");
-            router.refresh();
           } else {
             setStatus("waiting");
           }
@@ -95,7 +92,7 @@ export function TicketThread({
       mounted = false;
       supabase.removeChannel(channel);
     };
-  }, [supabase, ticket.id, router]);
+  }, [supabase, ticket.id]);
 
   async function sendReply() {
     const text = message.trim();
@@ -121,7 +118,6 @@ export function TicketThread({
     if (result.success) {
       setStatus(status === "closed" ? "open" : "closed");
       toast.success(result.message ?? "Updated");
-      router.refresh();
     } else {
       toast.error(result.error ?? "Failed");
     }
