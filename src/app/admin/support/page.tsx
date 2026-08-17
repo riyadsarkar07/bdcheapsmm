@@ -12,7 +12,7 @@ export default async function AdminSupportPage() {
   const supabase = await createClient();
   const { data: tickets, error: queryError } = await supabase
     .from("tickets")
-    .select("*, profiles(full_name, email, avatar_url)")
+    .select("*")
     .order("last_message_at", { ascending: false });
 
   if (queryError) {
@@ -26,13 +26,27 @@ export default async function AdminSupportPage() {
     );
   }
 
+  // tickets has two FKs to profiles (user_id, assigned_to), so a direct
+  // profiles(...) embed is ambiguous. Fetch the ticket owners separately and
+  // merge them in code.
+  const userIds = Array.from(new Set((tickets ?? []).map((t) => t.user_id).filter(Boolean)));
+  let profilesById: Record<string, { full_name: string | null; email: string | null; avatar_url: string | null }> = {};
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, email, avatar_url")
+      .in("id", userIds);
+    profilesById = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]));
+  }
+  const rows = (tickets ?? []).map((t) => ({ ...t, profiles: profilesById[t.user_id] ?? null }));
+
   return (
     <div>
       <PageHeader
         title="Support Tickets"
         description="Read and reply to user support requests. Replies are delivered in realtime."
       />
-      <AdminSupport tickets={tickets ?? []} />
+      <AdminSupport tickets={rows} />
     </div>
   );
 }

@@ -68,7 +68,7 @@ export default async function AdminDashboardPage() {
       .limit(8),
     supabase
       .from("payment_requests")
-      .select("id, user_id, profiles(full_name, email), method, amount, currency, status, created_at")
+      .select("id, user_id, method, amount, currency, status, created_at")
       .eq("status", "pending")
       .order("created_at", { ascending: false })
       .limit(6),
@@ -78,6 +78,24 @@ export default async function AdminDashboardPage() {
       .order("created_at", { ascending: false })
       .limit(5),
   ]);
+
+  // payment_requests has two FKs to profiles (user_id, processed_by), so the
+  // profiles(...) embed is ambiguous. Fetch the requesters separately.
+  const paymentUserIds = Array.from(
+    new Set((recentPayments.data ?? []).map((p) => p.user_id).filter(Boolean))
+  );
+  let paymentProfilesById: Record<string, { full_name: string | null; email: string | null }> = {};
+  if (paymentUserIds.length > 0) {
+    const { data: paymentProfiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, email")
+      .in("id", paymentUserIds);
+    paymentProfilesById = Object.fromEntries((paymentProfiles ?? []).map((p) => [p.id, p]));
+  }
+  const recentPaymentsWithProfiles = (recentPayments.data ?? []).map((p) => ({
+    ...p,
+    profiles: paymentProfilesById[p.user_id] ?? null,
+  }));
 
   return (
     <div>
@@ -159,10 +177,10 @@ export default async function AdminDashboardPage() {
               <CardTitle className="text-base">Pending Payments</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 p-4">
-              {(recentPayments.data ?? []).length === 0 ? (
+              {recentPaymentsWithProfiles.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No pending payments.</p>
               ) : (
-                (recentPayments.data ?? []).map((payment) => (
+                recentPaymentsWithProfiles.map((payment) => (
                   <Link
                     key={payment.id}
                     href="/admin/payments"
