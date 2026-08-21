@@ -2,13 +2,10 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/guards";
 import { PageHeader } from "@/components/page-header";
-import { EmptyState } from "@/components/empty-state";
-import { OrderStatusBadge } from "@/components/status-badges";
+import { OrdersList } from "@/components/orders/orders-list";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Layers } from "lucide-react";
-import { formatUsd, formatDateTime, truncate } from "@/lib/utils";
+import { Plus } from "lucide-react";
 import type { OrderStatus } from "@/lib/types/database";
 
 export const revalidate = 0;
@@ -66,58 +63,7 @@ export default async function OrdersPage({
         </TabsList>
       </Tabs>
 
-      {(orders ?? []).length === 0 ? (
-        <EmptyState
-          title="No orders found"
-          description="Place your first order and it will show up here."
-          action={
-            <Button asChild variant="gradient">
-              <Link href="/services">
-                <Layers /> Browse Services
-              </Link>
-            </Button>
-          }
-        />
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Order #</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Service</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Qty</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Price</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(orders ?? []).map((order) => (
-                    <tr key={order.id} className="border-b last:border-0 hover:bg-muted/50">
-                      <td className="px-4 py-3">
-                        <Link href={`/orders/${order.id}`} className="font-semibold text-primary hover:underline">
-                          #{order.order_number}
-                        </Link>
-                      </td>
-                      <td className="max-w-[280px] px-4 py-3">
-                        <span className="line-clamp-1">{truncate(order.services?.name ?? "Service", 50)}</span>
-                      </td>
-                      <td className="px-4 py-3 text-right">{order.quantity.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right font-medium">{formatUsd(order.price)}</td>
-                      <td className="px-4 py-3">
-                        <OrderStatusBadge status={order.status as OrderStatus} />
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">{formatDateTime(order.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <OrdersList initialOrders={orders ?? []} userId={user.id} statusFilter={status} />
     </div>
   );
 }
