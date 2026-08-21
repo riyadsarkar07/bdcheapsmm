@@ -24,6 +24,13 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PlatformLogo } from "@/components/platform-logo";
 import { PageHeader } from "@/components/page-header";
 import { OrderForm } from "@/components/services/order-form";
@@ -37,7 +44,7 @@ import {
 import type { Category, Json } from "@/lib/types/database";
 
 const PAGE_SIZE = 40;
-const NULL_UUID = "00000000-0000-0000-0000-000000000000";
+const UNCATEGORIZED = "__uncategorized__";
 
 type ServiceRow = {
   id: string;
@@ -124,12 +131,6 @@ export function ServicesBrowser() {
     return groups;
   }, [categories]);
 
-  const platformCategoryIds = React.useMemo(() => {
-    const m = new Map<string, string[]>();
-    for (const [slug, cats] of platformGroups) m.set(slug, cats.map((c) => c.id));
-    return m;
-  }, [platformGroups]);
-
   // Platforms that actually have categories, in display order.
   const visiblePlatforms = React.useMemo(
     () => PLATFORMS.filter((p) => (platformGroups.get(p.slug)?.length ?? 0) > 0),
@@ -170,6 +171,7 @@ export function ServicesBrowser() {
 
   const { data: services, isLoading } = useQuery({
     queryKey: ["services", platform, category, debouncedSearch, limit],
+    enabled: platform === "all" || Boolean(category),
     queryFn: async () => {
       let q = supabase
         .from("services")
@@ -178,19 +180,10 @@ export function ServicesBrowser() {
         )
         .eq("is_active", true);
 
-      if (category) {
+      if (category === UNCATEGORIZED) {
+        q = q.is("category_id", null);
+      } else if (category) {
         q = q.eq("category_id", category);
-      } else if (platform !== "all") {
-        const ids = platformCategoryIds.get(platform) ?? [];
-        if (platform === OTHER_PLATFORM) {
-          q = ids.length
-            ? q.or(`category_id.is.null,category_id.in.(${ids.join(",")})`)
-            : q.is("category_id", null);
-        } else if (ids.length) {
-          q = q.in("category_id", ids);
-        } else {
-          q = q.eq("category_id", NULL_UUID);
-        }
       }
 
       if (debouncedSearch) q = q.ilike("name", `%${debouncedSearch}%`);
@@ -315,37 +308,32 @@ export function ServicesBrowser() {
                 <ChevronDown className="h-4 w-4 text-muted-foreground" />
               </div>
 
-              {activeCategories.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setFilter({ category: null })}
-                    className={cn(
-                      "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                      !category
-                        ? "gradient-bg border-transparent text-white shadow"
-                        : "bg-background hover:bg-muted"
-                    )}
+              {activeCategories.length > 0 || platform === OTHER_PLATFORM ? (
+                <div className="max-w-md">
+                  <Select
+                    value={category ?? ""}
+                    onValueChange={(value) => setFilter({ category: value || null })}
                   >
-                    All {PLATFORM_LABELS[platform] ?? "categories"}
-                  </button>
-                  {activeCategories.map((cat) => (
-                    <button
-                      key={cat.id}
-                      onClick={() => setFilter({ category: cat.id })}
-                      className={cn(
-                        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                        category === cat.id
-                          ? "gradient-bg border-transparent text-white shadow"
-                          : "bg-background hover:bg-muted"
-                      )}
-                    >
-                      {cat.name}
-                    </button>
-                  ))}
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={`Select ${PLATFORM_LABELS[platform] ?? "platform"} category`}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeCategories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </SelectItem>
+                      ))}
+                      {platform === OTHER_PLATFORM ? (
+                        <SelectItem value={UNCATEGORIZED}>Uncategorized</SelectItem>
+                      ) : null}
+                    </SelectContent>
+                  </Select>
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Showing all services for this platform.
+                  No categories for this platform.
                 </p>
               )}
             </div>
@@ -385,7 +373,14 @@ export function ServicesBrowser() {
       ) : null}
 
       {/* Service list */}
-      {isLoading ? (
+      {platform !== "all" && !category ? (
+        <div className="rounded-xl border border-dashed p-10 text-center">
+          <p className="text-sm font-medium text-muted-foreground">
+            Select a category above to browse{" "}
+            {PLATFORM_LABELS[platform] ?? "this platform"} services.
+          </p>
+        </div>
+      ) : isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 9 }).map((_, i) => (
             <Skeleton key={i} className="h-36 rounded-xl" />
