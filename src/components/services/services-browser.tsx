@@ -140,7 +140,13 @@ export function ServicesBrowser() {
   const { data: profile } = useQuery({
     queryKey: ["profile-balance"],
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("id, balance, currency").single();
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) return null;
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, balance, currency")
+        .eq("id", auth.user.id)
+        .maybeSingle();
       return data;
     },
     staleTime: 0,
