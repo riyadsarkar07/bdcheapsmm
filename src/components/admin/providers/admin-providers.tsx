@@ -33,7 +33,7 @@ import {
   checkProviderBalanceAction,
   testProviderConnectionAction,
 } from "@/lib/actions/admin";
-import { formatCurrency, timeAgo } from "@/lib/utils";
+import { formatUsd, timeAgo } from "@/lib/utils";
 
 type ProviderRow = {
   id: string;
@@ -91,7 +91,7 @@ export function AdminProviders({
     try {
       const result = await checkProviderBalanceAction(providerId);
       if (result.success) {
-        toast.success(`Provider balance: ${formatCurrency(result.data?.balance ?? 0)}`);
+        toast.success(`Provider balance: ${formatUsd(result.data?.balance ?? 0)}`);
       } else {
         toast.error(result.error ?? "Failed");
       }
@@ -160,7 +160,7 @@ export function AdminProviders({
                 </div>
 
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span>Balance: {provider.balance != null ? formatCurrency(provider.balance) : "—"}</span>
+                  <span>Balance: {provider.balance != null ? formatUsd(provider.balance) : "—"}</span>
                   <span>· Last sync: {provider.last_sync_at ? timeAgo(provider.last_sync_at) : "never"}</span>
                 </div>
 

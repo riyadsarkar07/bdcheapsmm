@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { computeOrderCharge } from "@/lib/pricing";
 import { createHash } from "crypto";
 
 export const runtime = "nodejs";
@@ -92,7 +93,7 @@ export async function POST(request: Request) {
     .single();
   if (!provider) return NextResponse.json({ error: "Provider not configured" }, { status: 500 });
 
-  const price = Math.round(service.price * qty * 100) / 100;
+  const price = computeOrderCharge(service.price, qty);
   if (profile.balance < price) {
     return NextResponse.json(
       { error: `Insufficient balance: need ${price}, have ${profile.balance}` },

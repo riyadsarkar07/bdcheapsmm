@@ -11,16 +11,18 @@ export default async function AddFundsPage() {
   if (error || !user) return null;
 
   const supabase = await createClient();
-  const settings = await getPublicSettings();
 
-  const { data: paymentRequests } = await supabase
-    .from("payment_requests")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(20);
+  const [settings, paymentRequestsRes] = await Promise.all([
+    getPublicSettings(),
+    supabase
+      .from("payment_requests")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(20),
+  ]);
 
-  const rows = await resolveScreenshotUrls(supabase, paymentRequests ?? []);
+  const rows = await resolveScreenshotUrls(supabase, paymentRequestsRes.data ?? []);
 
   return (
     <div>

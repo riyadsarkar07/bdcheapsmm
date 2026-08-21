@@ -53,11 +53,10 @@ type ServiceRow = {
   meta: Json | null;
   category_id: string | null;
   categories?: { name: string | null; slug: string | null; icon: string | null } | null;
-};
-
-type SelectedService = ServiceRow & {
   providers?: { id: string; name: string } | null;
 };
+
+type SelectedService = ServiceRow;
 
 function parseMeta(meta: Json | null): Record<string, unknown> {
   if (meta && typeof meta === "object" && !Array.isArray(meta)) {
@@ -165,7 +164,7 @@ export function ServicesBrowser() {
       let q = supabase
         .from("services")
         .select(
-          "id, name, slug, description, price, min_quantity, max_quantity, average_time, type, is_active, is_featured, provider_service_id, meta, category_id, categories(name, slug, icon)"
+          "id, name, slug, description, price, min_quantity, max_quantity, average_time, type, is_active, is_featured, provider_service_id, meta, category_id, categories(name, slug, icon), providers(id, name)"
         )
         .eq("is_active", true);
 
@@ -191,21 +190,11 @@ export function ServicesBrowser() {
     },
   });
 
-  const { data: selected } = useQuery({
-    queryKey: ["service", selectedId],
-    enabled: !!selectedId,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("services")
-        .select(
-          "id, name, slug, description, price, min_quantity, max_quantity, average_time, type, is_active, is_featured, provider_service_id, meta, category_id, categories(name, slug, icon), providers(id, name)"
-        )
-        .eq("id", selectedId as string)
-        .maybeSingle();
-      return (data ?? null) as SelectedService | null;
-    },
-  });
-
+  // The selection always comes from the loaded list (which now includes the
+  // provider embed), so derive it instead of issuing a second DB query.
+  const selected = selectedId
+    ? (services?.find((s) => s.id === selectedId) ?? null)
+    : null;
   function setFilter(next: { p?: string; category?: string | null }) {
     const params = new URLSearchParams(searchParams.toString());
     if (next.p) params.set("p", next.p);
@@ -488,10 +477,18 @@ function ServiceDetails({
   const meta = parseMeta(service.meta);
   const refill = yesNo(meta.refill);
   const cancel = yesNo(meta.cancel);
+  const drop = yesNo(meta.drop);
   const driptype =
     typeof meta.driptype === "string" && meta.driptype ? meta.driptype : null;
+  const speed = driptype ?? null;
   const guarantee =
     typeof meta.guarantee === "string" && meta.guarantee ? meta.guarantee : null;
+  const quality =
+    typeof meta.quality === "string" && meta.quality
+      ? meta.quality
+      : typeof meta.speed === "string" && meta.speed
+        ? meta.speed
+        : null;
 
   return (
     <div className="glass-card rounded-xl p-6">
@@ -504,11 +501,9 @@ function ServiceDetails({
             {PLATFORM_LABELS[platform] ?? platform}
           </p>
           <h2 className="text-lg font-bold leading-snug">{service.name}</h2>
-          {service.providers ? (
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              Provider: {service.providers.name}
-            </p>
-          ) : null}
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Provider: {service.providers?.name ?? "—"}
+          </p>
         </div>
       </div>
 
@@ -521,6 +516,20 @@ function ServiceDetails({
           />
           <DetailRow label="Rate / 1k" value={formatUsd(service.price)} />
           <DetailRow
+            label="Min – Max"
+            value={`${service.min_quantity.toLocaleString()} – ${service.max_quantity.toLocaleString()}`}
+          />
+          <DetailRow label="Start Time" value={service.average_time ?? "—"} />
+          <DetailRow label="Speed" value={speed ?? "—"} />
+          <DetailRow label="Guarantee" value={guarantee ?? "—"} />
+        </div>
+        <div>
+          <DetailRow label="Refill" value={refill} />
+          <DetailRow label="Cancel" value={cancel} />
+          <DetailRow label="Drop" value={drop} />
+          <DetailRow label="Quality" value={quality ?? "—"} />
+          <DetailRow label="Type" value={service.type ?? "—"} />
+          <DetailRow
             label="Example Link"
             value={
               <span className="block max-w-[240px] truncate text-xs text-muted-foreground">
@@ -528,15 +537,6 @@ function ServiceDetails({
               </span>
             }
           />
-          <DetailRow label="Start Time" value={service.average_time ?? "—"} />
-          <DetailRow label="Speed / Drip" value={driptype ?? "—"} />
-        </div>
-        <div>
-          <DetailRow label="Refill" value={refill} />
-          <DetailRow label="Cancel" value={cancel} />
-          <DetailRow label="Min – Max" value={`${service.min_quantity.toLocaleString()} – ${service.max_quantity.toLocaleString()}`} />
-          <DetailRow label="Type" value={service.type ?? "standard"} />
-          {guarantee ? <DetailRow label="Guarantee" value={guarantee} /> : null}
         </div>
       </div>
 
@@ -544,7 +544,11 @@ function ServiceDetails({
         <div className="mt-4 rounded-lg bg-muted/50 p-3">
           <p className="whitespace-pre-line text-sm text-muted-foreground">{service.description}</p>
         </div>
-      ) : null}
+      ) : (
+        <div className="mt-4 rounded-lg bg-muted/50 p-3">
+          <p className="text-sm text-muted-foreground">No description available.</p>
+        </div>
+      )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <Badge variant="secondary">

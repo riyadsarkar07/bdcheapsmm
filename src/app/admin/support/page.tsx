@@ -12,8 +12,9 @@ export default async function AdminSupportPage() {
   const supabase = await createClient();
   const { data: tickets, error: queryError } = await supabase
     .from("tickets")
-    .select("*")
-    .order("last_message_at", { ascending: false });
+    .select("id, ticket_number, subject, status, priority, category, user_id, assigned_to, last_message_at, created_at, updated_at")
+    .order("last_message_at", { ascending: false })
+    .limit(200);
 
   if (queryError) {
     return (

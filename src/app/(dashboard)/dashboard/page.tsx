@@ -26,29 +26,37 @@ export default async function DashboardPage() {
 
   const supabase = await createClient();
 
-  const { data: recentOrders } = await supabase
-    .from("orders")
-    .select("id, order_number, service_id, services(name), quantity, price, status, created_at, currency")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(8);
-
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 
-  const [ordersRes, todayOrdersRes, pendingRes, completedRes, cancelledRes, spendingRes] =
-    await Promise.all([
-      supabase.from("orders").select("id", { count: "exact", head: true }).eq("user_id", user.id),
-      supabase.from("orders").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", startOfToday),
-      supabase.from("orders").select("id", { count: "exact", head: true }).eq("user_id", user.id).in("status", ["pending", "processing", "in_progress"]),
-      supabase.from("orders").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "completed"),
-      supabase.from("orders").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "cancelled"),
-      supabase
-        .from("transactions")
-        .select("amount")
-        .eq("user_id", user.id)
-        .eq("type", "order_deduction"),
-    ]);
+  const [
+    ordersRes,
+    todayOrdersRes,
+    pendingRes,
+    completedRes,
+    cancelledRes,
+    spendingRes,
+    recentOrdersRes,
+  ] = await Promise.all([
+    supabase.from("orders").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+    supabase.from("orders").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", startOfToday),
+    supabase.from("orders").select("id", { count: "exact", head: true }).eq("user_id", user.id).in("status", ["pending", "processing", "in_progress"]),
+    supabase.from("orders").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "completed"),
+    supabase.from("orders").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "cancelled"),
+    supabase
+      .from("transactions")
+      .select("amount")
+      .eq("user_id", user.id)
+      .eq("type", "order_deduction"),
+    supabase
+      .from("orders")
+      .select("id, order_number, service_id, services(name), quantity, price, status, created_at, currency")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(8),
+  ]);
+
+  const recentOrders = recentOrdersRes.data ?? [];
 
   const totalSpent = (spendingRes.data ?? []).reduce(
     (sum, t) => sum + Math.abs(Number(t.amount)),
@@ -74,7 +82,7 @@ export default async function DashboardPage() {
         <StatCard title="Pending" value={pendingRes.count ?? 0} icon={<Clock className="h-5 w-5" />} color="warning" />
         <StatCard title="Completed" value={completedRes.count ?? 0} icon={<CheckCircle2 className="h-5 w-5" />} color="success" />
         <StatCard title="Cancelled" value={cancelledRes.count ?? 0} icon={<XCircle className="h-5 w-5" />} color="destructive" />
-        <StatCard title="Total Spent" value={formatCurrency(totalSpent, user.currency)} icon={<TrendingUp className="h-5 w-5" />} color="info" />
+        <StatCard title="Total Spent" value={formatUsd(totalSpent)} icon={<TrendingUp className="h-5 w-5" />} color="info" />
       </div>
 
       <div className="mt-8">

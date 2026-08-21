@@ -182,10 +182,12 @@ export function OrderForm({
 
           <div className="rounded-lg bg-muted/60 p-4">
             <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Quantity</span>
+              <span className="font-medium">{quantity.toLocaleString()}</span>
+            </div>
+            <div className="mt-1.5 flex justify-between text-sm">
               <span className="text-muted-foreground">Rate (per 1k)</span>
-              <span>
-                {formatUsd(pricePerUnit)} × {quantity.toLocaleString()}
-              </span>
+              <span>{formatUsd(pricePerUnit)}</span>
             </div>
             <div className="mt-2 flex items-center justify-between border-t pt-2">
               <span className="font-medium">Total</span>

@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { TransactionTypeBadge } from "@/components/status-badges";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { formatCurrency, formatUsd, formatDateTime } from "@/lib/utils";
 import type { TransactionType } from "@/lib/types/database";
 
 export const revalidate = 0;
@@ -41,7 +41,7 @@ export default async function TransactionsPage() {
         <div className="glass-card rounded-xl p-4">
           <p className="text-sm text-muted-foreground">Total Spent</p>
           <p className="mt-1 text-xl font-bold text-destructive">
-            {formatCurrency(spent, user.currency)}
+            {formatUsd(spent)}
           </p>
         </div>
         <div className="glass-card rounded-xl p-4">

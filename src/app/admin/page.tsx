@@ -43,6 +43,9 @@ export default async function AdminDashboardPage() {
     openTickets,
     activeServices,
     activeProviders,
+    recentOrders,
+    recentPayments,
+    recentUsers,
   ] = await Promise.all([
     supabase.from("profiles").select("id", { count: "exact", head: true }),
     supabase.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", startOfToday),
@@ -56,11 +59,6 @@ export default async function AdminDashboardPage() {
     supabase.from("tickets").select("id", { count: "exact", head: true }).in("status", ["open", "waiting"]),
     supabase.from("services").select("id", { count: "exact", head: true }).eq("is_active", true),
     supabase.from("providers").select("id", { count: "exact", head: true }).eq("status", "active"),
-  ]);
-
-  const revenue = (revenueRes.data ?? []).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
-
-  const [recentOrders, recentPayments, recentUsers] = await Promise.all([
     supabase
       .from("orders")
       .select("id, order_number, user_id, profiles(full_name, email), services(name), quantity, price, status, created_at, currency")
@@ -78,6 +76,8 @@ export default async function AdminDashboardPage() {
       .order("created_at", { ascending: false })
       .limit(5),
   ]);
+
+  const revenue = (revenueRes.data ?? []).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
 
   // payment_requests has two FKs to profiles (user_id, processed_by), so the
   // profiles(...) embed is ambiguous. Fetch the requesters separately.
@@ -110,7 +110,7 @@ export default async function AdminDashboardPage() {
         <StatCard title="Pending Orders" value={pendingOrders.count ?? 0} icon={<Clock className="h-5 w-5" />} color="warning" />
         <StatCard title="Deposits (Pending)" value={pendingPayments.count ?? 0} icon={<Banknote className="h-5 w-5" />} color="destructive" />
         <StatCard title="Open Tickets" value={openTickets.count ?? 0} icon={<Ticket className="h-5 w-5" />} color="warning" />
-        <StatCard title="Total Revenue" value={formatCurrency(revenue)} icon={<TrendingUp className="h-5 w-5" />} color="success" description="From all order charges" />
+        <StatCard title="Total Revenue" value={formatUsd(revenue)} icon={<TrendingUp className="h-5 w-5" />} color="success" description="From all order charges" />
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
