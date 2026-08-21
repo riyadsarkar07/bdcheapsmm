@@ -12,8 +12,10 @@ interface LogInput {
 }
 
 export async function writeLog(input: LogInput): Promise<void> {
-  const { createClient } = await import("@/lib/supabase/server");
-  const supabase = await createClient();
+  // The logs table only allows admin access under RLS, so use the service-role
+  // client to guarantee the entry is persisted for every user.
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const supabase = createAdminClient();
   await supabase.from("logs").insert({
     user_id: input.userId,
     action: input.action,

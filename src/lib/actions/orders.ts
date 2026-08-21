@@ -5,11 +5,12 @@ import { createOrderSchema } from "@/lib/validations";
 import { fail, ok, requireUser, isAdminProfile, type ActionResult } from "@/lib/guards";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { generateOrderNumber, formatUsd } from "@/lib/utils";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { providerApi } from "@/lib/provider/smmfollow";
 import { computeOrderCharge, round2 } from "@/lib/pricing";
 import { writeLog } from "@/lib/audit";
 import { createNotification } from "@/lib/notify";
-import type { OrderStatus } from "@/lib/types/database";
+import type { Json, OrderStatus } from "@/lib/types/database";
 
 export async function createOrderAction(input: {
   serviceId: string;
@@ -155,7 +156,11 @@ export async function createOrderAction(input: {
   }
 
   // 3. Submit to provider
-  const { data: provider } = await supabase
+  // Provider credentials (api_url, api_key) are protected by RLS and only
+  // readable by admins via the user-scoped client, so read them with the
+  // service-role client. This block runs server-side only.
+  const admin = createAdminClient();
+  const { data: provider, error: providerError } = await admin
     .from("providers")
     .select("id, name, api_url, api_key")
     .eq("id", service.provider_id)
@@ -165,7 +170,10 @@ export async function createOrderAction(input: {
   let providerResponse: unknown = null;
   let status: OrderStatus = "processing";
 
-  if (provider) {
+  if (providerError) {
+    status = "failed";
+    providerResponse = { error: providerError.message };
+  } else if (provider) {
     try {
       const result = await providerApi.createOrder(provider, {
         service: Number(service.provider_service_id),
@@ -207,10 +215,17 @@ export async function createOrderAction(input: {
     action: "order_create",
     entityType: "orders",
     entityId: order.id,
-    description: `Created order #${orderNumber} for ${qty}x ${service.name}`,
+    description: status === "failed"
+      ? `Created order #${orderNumber} for ${qty}x ${service.name} but provider submission failed: ${String((providerResponse as { error?: string })?.error ?? "Unknown error")}`
+      : `Created order #${orderNumber} for ${qty}x ${service.name} and submitted to provider (provider order id ${providerOrderId})`,
     ip,
     userAgent: headerStore.get("user-agent"),
-    meta: { price, provider_order_id: providerOrderId },
+    meta: {
+      price,
+      provider_order_id: providerOrderId,
+      provider_submitted: status !== "failed",
+      provider_response: providerResponse as Json,
+    },
   });
 
   return ok({ orderId: order.id, orderNumber });
@@ -262,7 +277,7 @@ export async function cancelOrderAction(orderId: string): Promise<ActionResult> 
 
   let provider: { id: string; name: string; api_url: string; api_key: string } | null = null;
   if (order.provider_id) {
-    const { data: p } = await supabase
+    const { data: p } = await createAdminClient()
       .from("providers")
       .select("id, name, api_url, api_key")
       .eq("id", order.provider_id)
@@ -323,7 +338,7 @@ export async function refreshOrderStatusAction(orderId: string): Promise<ActionR
   if (!order.provider_order_id) return fail("Order has no provider reference yet.");
   if (!order.provider_id) return fail("Provider not found.");
 
-  const { data: provider } = await supabase
+  const { data: provider } = await createAdminClient()
     .from("providers")
     .select("id, name, api_url, api_key")
     .eq("id", order.provider_id)
@@ -366,7 +381,7 @@ export async function refillOrderAction(orderId: string): Promise<ActionResult> 
   if ((order.refill_count ?? 0) >= 2) return fail("Refill limit reached for this order.");
   if (!order.provider_id) return fail("Provider not found.");
 
-  const { data: provider } = await supabase
+  const { data: provider } = await createAdminClient()
     .from("providers")
     .select("id, name, api_url, api_key")
     .eq("id", order.provider_id)
@@ -410,7 +425,7 @@ export async function retryFailedOrderAction(orderId: string): Promise<ActionRes
   }
   if (!order.provider_id) return fail("Provider not found.");
 
-  const { data: provider } = await supabase
+  const { data: provider } = await createAdminClient()
     .from("providers")
     .select("id, name, api_url, api_key")
     .eq("id", order.provider_id)
