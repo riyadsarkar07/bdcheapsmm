@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
-import { CategoryIcon } from "@/components/category-icon";
+import { PlatformLogo } from "@/components/platform-logo";
 import { PageHeader } from "@/components/page-header";
 import { OrderForm } from "@/components/services/order-form";
 import {
@@ -259,22 +259,19 @@ export function ServicesBrowser() {
             name="All services"
             onClick={() => setFilter({ p: "", category: null })}
           />
-          {visiblePlatforms.map((p) => {
-            const icon = platformGroups.get(p.slug)?.[0]?.icon ?? null;
-            return (
-              <PlatformTile
-                key={p.slug}
-                active={platform === p.slug}
-                icon={<CategoryIcon icon={icon} className="h-5 w-5" />}
-                name={p.name}
-                onClick={() =>
-                  platform === p.slug
-                    ? setFilter({ p: "", category: null })
-                    : setFilter({ p: p.slug, category: null })
-                }
-              />
-            );
-          })}
+          {visiblePlatforms.map((p) => (
+            <PlatformTile
+              key={p.slug}
+              active={platform === p.slug}
+              slug={p.slug}
+              name={p.name}
+              onClick={() =>
+                platform === p.slug
+                  ? setFilter({ p: "", category: null })
+                  : setFilter({ p: p.slug, category: null })
+              }
+            />
+          ))}
           {otherCount > 0 ? (
             <PlatformTile
               active={platform === OTHER_PLATFORM}
@@ -304,10 +301,7 @@ export function ServicesBrowser() {
             <div className="glass-card mb-6 rounded-xl p-4">
               <div className="mb-3 flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg gradient-bg text-white shadow">
-                  <CategoryIcon
-                    icon={platformGroups.get(platform)?.[0]?.icon ?? null}
-                    className="h-4 w-4"
-                  />
+                  <PlatformLogo slug={platform} className="h-4 w-4" color="white" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold leading-tight">
@@ -422,7 +416,7 @@ export function ServicesBrowser() {
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-bg text-white shadow">
-                      <CategoryIcon icon={service.categories?.icon ?? null} className="h-4 w-4" />
+                      <PlatformLogo slug={servicePlatform} className="h-4 w-4" color="white" />
                     </div>
                     <div>
                       <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -493,12 +487,14 @@ export function ServicesBrowser() {
 
 function PlatformTile({
   active,
+  slug,
   icon,
   name,
   onClick,
 }: {
   active: boolean;
-  icon: React.ReactNode;
+  slug?: string;
+  icon?: React.ReactNode;
   name: string;
   onClick: () => void;
 }) {
@@ -518,7 +514,11 @@ function PlatformTile({
           active ? "bg-white/20 text-white" : "bg-muted/70 text-primary"
         )}
       >
-        {icon}
+        {slug ? (
+          <PlatformLogo slug={slug} className="h-5 w-5" color={active ? "white" : undefined} />
+        ) : (
+          icon
+        )}
       </div>
       <span className="line-clamp-2 text-[11px] font-semibold leading-tight sm:text-xs">
         {name}
@@ -573,7 +573,7 @@ function ServiceDetails({
     <div className="glass-card rounded-xl p-6">
       <div className="mb-4 flex items-start gap-3">
         <div className="flex h-11 w-11 items-center justify-center rounded-xl gradient-bg text-white shadow-lg">
-          <CategoryIcon icon={service.categories?.icon ?? null} className="h-5 w-5" />
+          <PlatformLogo slug={platform} className="h-5 w-5" color="white" />
         </div>
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
