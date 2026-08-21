@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { cn, formatCurrency, formatUsd } from "@/lib/utils";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Search,
   Clock,
@@ -16,6 +16,8 @@ import {
   HeartOff,
   Hash,
   Layers,
+  LayoutGrid,
+  ChevronDown,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -245,83 +247,117 @@ export function ServicesBrowser() {
         </Badge>
       </PageHeader>
 
-      {/* Platform selector */}
-      <div className="mb-3 flex flex-wrap gap-2">
-        <button
-          onClick={() => setFilter({ p: "", category: null })}
-          className={cn(
-            "rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors",
-            platform === "all"
-              ? "gradient-bg border-transparent text-white shadow"
-              : "bg-background hover:bg-muted"
-          )}
-        >
-          All
-        </button>
-        {visiblePlatforms.map((p) => {
-          const icon = platformGroups.get(p.slug)?.[0]?.icon ?? null;
-          return (
-            <button
-              key={p.slug}
-              onClick={() => setFilter({ p: p.slug, category: null })}
-              className={cn(
-                "flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors",
-                platform === p.slug
-                  ? "gradient-bg border-transparent text-white shadow"
-                  : "bg-background hover:bg-muted"
-              )}
-            >
-              <CategoryIcon icon={icon} className="h-3.5 w-3.5" />
-              {p.name}
-            </button>
-          );
-        })}
-        {otherCount > 0 ? (
-          <button
-            onClick={() => setFilter({ p: OTHER_PLATFORM, category: null })}
-            className={cn(
-              "flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors",
-              platform === OTHER_PLATFORM
-                ? "gradient-bg border-transparent text-white shadow"
-                : "bg-background hover:bg-muted"
-            )}
-          >
-            <Layers className="h-3.5 w-3.5" />
-            Other
-          </button>
-        ) : null}
+      {/* Platform menu: pick a platform to browse its services */}
+      <div className="mb-6">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Browse by platform
+        </p>
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+          <PlatformTile
+            active={platform === "all"}
+            icon={<LayoutGrid className="h-5 w-5" />}
+            name="All services"
+            onClick={() => setFilter({ p: "", category: null })}
+          />
+          {visiblePlatforms.map((p) => {
+            const icon = platformGroups.get(p.slug)?.[0]?.icon ?? null;
+            return (
+              <PlatformTile
+                key={p.slug}
+                active={platform === p.slug}
+                icon={<CategoryIcon icon={icon} className="h-5 w-5" />}
+                name={p.name}
+                onClick={() =>
+                  platform === p.slug
+                    ? setFilter({ p: "", category: null })
+                    : setFilter({ p: p.slug, category: null })
+                }
+              />
+            );
+          })}
+          {otherCount > 0 ? (
+            <PlatformTile
+              active={platform === OTHER_PLATFORM}
+              icon={<Layers className="h-5 w-5" />}
+              name="Other"
+              onClick={() =>
+                platform === OTHER_PLATFORM
+                  ? setFilter({ p: "", category: null })
+                  : setFilter({ p: OTHER_PLATFORM, category: null })
+              }
+            />
+          ) : null}
+        </div>
       </div>
 
-      {/* Category selector for the active platform */}
-      {activeCategories.length > 0 ? (
-        <div className="mb-4 flex flex-wrap gap-2">
-          <button
-            onClick={() => setFilter({ category: null })}
-            className={cn(
-              "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-              !category
-                ? "gradient-bg border-transparent text-white shadow"
-                : "bg-background hover:bg-muted"
-            )}
+      {/* Expanded platform panel (accordion) */}
+      <AnimatePresence mode="wait">
+        {platform !== "all" ? (
+          <motion.div
+            key={platform}
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="overflow-hidden"
           >
-            All {PLATFORM_LABELS[platform] ?? "categories"}
-          </button>
-          {activeCategories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setFilter({ category: cat.id })}
-              className={cn(
-                "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                category === cat.id
-                  ? "gradient-bg border-transparent text-white shadow"
-                  : "bg-background hover:bg-muted"
+            <div className="glass-card mb-6 rounded-xl p-4">
+              <div className="mb-3 flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg gradient-bg text-white shadow">
+                  <CategoryIcon
+                    icon={platformGroups.get(platform)?.[0]?.icon ?? null}
+                    className="h-4 w-4"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold leading-tight">
+                    {PLATFORM_LABELS[platform] ?? platform}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {activeCategories.length}{" "}
+                    {activeCategories.length === 1 ? "category" : "categories"}
+                  </p>
+                </div>
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              </div>
+
+              {activeCategories.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setFilter({ category: null })}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                      !category
+                        ? "gradient-bg border-transparent text-white shadow"
+                        : "bg-background hover:bg-muted"
+                    )}
+                  >
+                    All {PLATFORM_LABELS[platform] ?? "categories"}
+                  </button>
+                  {activeCategories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setFilter({ category: cat.id })}
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                        category === cat.id
+                          ? "gradient-bg border-transparent text-white shadow"
+                          : "bg-background hover:bg-muted"
+                      )}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Showing all services for this platform.
+                </p>
               )}
-            >
-              {cat.name}
-            </button>
-          ))}
-        </div>
-      ) : null}
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       {/* Search */}
       <div className="relative mb-6 max-w-md">
@@ -452,6 +488,42 @@ export function ServicesBrowser() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function PlatformTile({
+  active,
+  icon,
+  name,
+  onClick,
+}: {
+  active: boolean;
+  icon: React.ReactNode;
+  name: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex flex-col items-center gap-2 rounded-xl border p-3 text-center transition-all sm:p-4",
+        active
+          ? "gradient-bg border-transparent text-white shadow-lg"
+          : "glass-card hover:-translate-y-0.5 hover:shadow-md"
+      )}
+    >
+      <div
+        className={cn(
+          "flex h-9 w-9 items-center justify-center rounded-lg sm:h-10 sm:w-10",
+          active ? "bg-white/20 text-white" : "bg-muted/70 text-primary"
+        )}
+      >
+        {icon}
+      </div>
+      <span className="line-clamp-2 text-[11px] font-semibold leading-tight sm:text-xs">
+        {name}
+      </span>
+    </button>
   );
 }
 
