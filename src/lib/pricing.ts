@@ -17,9 +17,11 @@ export function round2(value: number): number {
 }
 
 export function computeOrderCharge(pricePer1000: number, quantity: number): number {
-  if (!Number.isFinite(pricePer1000) || !Number.isFinite(quantity)) return 0;
-  if (pricePer1000 <= 0 || quantity <= 0) return 0;
-  return round2((pricePer1000 * quantity) / 1000);
+  const price = Number(pricePer1000);
+  const qty = Number(quantity);
+  if (!Number.isFinite(price) || !Number.isFinite(qty)) return 0;
+  if (price <= 0 || qty <= 0) return 0;
+  return round2((price * qty) / 1000);
 }
 
 // ============================================================
