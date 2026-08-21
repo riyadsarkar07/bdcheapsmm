@@ -120,7 +120,6 @@ export default async function ServiceOrderPage({
             pricePerUnit={Number(service.price)}
             minQuantity={service.min_quantity}
             maxQuantity={service.max_quantity}
-            currency={user.currency}
             balance={user.balance}
             linkPlaceholder={exampleLinkForPlatform(
               detectPlatform(service.categories?.name, service.categories?.slug)

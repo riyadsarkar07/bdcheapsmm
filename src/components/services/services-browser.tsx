@@ -143,6 +143,8 @@ export function ServicesBrowser() {
       const { data } = await supabase.from("profiles").select("id, balance, currency").single();
       return data;
     },
+    staleTime: 0,
+    refetchInterval: 15_000,
   });
 
   const { data: authUser } = useQuery({
@@ -336,7 +338,6 @@ export function ServicesBrowser() {
               pricePerUnit={Number(selected.price)}
               minQuantity={selected.min_quantity}
               maxQuantity={selected.max_quantity}
-              currency={profile?.currency ?? "BDT"}
               balance={profile?.balance ?? 0}
               linkPlaceholder={exampleLinkForPlatform(selectedPlatform)}
             />

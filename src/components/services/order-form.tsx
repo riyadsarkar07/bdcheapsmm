@@ -19,8 +19,9 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { createOrderAction } from "@/lib/actions/orders";
-import { formatCurrency, formatUsd } from "@/lib/utils";
+import { formatUsd } from "@/lib/utils";
 import { computeOrderCharge } from "@/lib/pricing";
+import { useQueryClient } from "@tanstack/react-query";
 
 const formSchema = z.object({
   quantity: z.coerce
@@ -42,7 +43,6 @@ interface OrderFormProps {
   pricePerUnit: number;
   minQuantity: number;
   maxQuantity: number;
-  currency: string;
   balance: number;
   linkPlaceholder?: string;
 }
@@ -53,11 +53,11 @@ export function OrderForm({
   pricePerUnit,
   minQuantity,
   maxQuantity,
-  currency,
   balance,
   linkPlaceholder,
 }: OrderFormProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = React.useState(false);
   const [couponStatus, setCouponStatus] = React.useState<
     "idle" | "applied" | "invalid"
@@ -85,6 +85,7 @@ export function OrderForm({
         toast.success(`Order ${result.data.orderNumber} placed successfully!`);
         setCouponStatus("idle");
         form.setValue("coupon", "");
+        queryClient.invalidateQueries({ queryKey: ["profile-balance"] });
         router.push(`/orders/${result.data.orderId}`);
         router.refresh();
       } else {
@@ -198,7 +199,7 @@ export function OrderForm({
             <div className="mt-2 flex items-center justify-between text-xs">
               <span className="text-muted-foreground">Your balance</span>
               <span className={insufficient ? "font-semibold text-destructive" : "font-semibold text-success"}>
-                {formatCurrency(balance, currency)}
+                {formatUsd(balance)}
               </span>
             </div>
           </div>
