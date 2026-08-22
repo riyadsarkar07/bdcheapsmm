@@ -103,6 +103,8 @@
 # Logs
 *.log
 **/logs/
+!src/app/admin/logs/
+!src/components/admin/logs/
 
 # Environment and secrets
 **/.env

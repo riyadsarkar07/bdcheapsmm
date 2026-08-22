@@ -25,7 +25,7 @@ export function AdminSettings({
   initial: {
     site: { name: string; tagline: string; logo: string | null; favicon: string | null };
     general: { currency: string; timezone: string; maintenance_mode: boolean };
-    payments: { bKash: string; nagad: string; rocket: string };
+    payments: { bKash: string; nagad: string; rocket: string; enabled: string[] };
     seo: { title: string; description: string; keywords: string };
     footer: { text: string };
   };
@@ -46,6 +46,9 @@ export function AdminSettings({
       bKash: initial.payments.bKash ?? "",
       nagad: initial.payments.nagad ?? "",
       rocket: initial.payments.rocket ?? "",
+      bKashEnabled: (initial.payments.enabled ?? ["bKash", "nagad", "rocket"]).includes("bKash"),
+      nagadEnabled: (initial.payments.enabled ?? ["bKash", "nagad", "rocket"]).includes("nagad"),
+      rocketEnabled: (initial.payments.enabled ?? ["bKash", "nagad", "rocket"]).includes("rocket"),
       seoTitle: initial.seo.title ?? "",
       seoDescription: initial.seo.description ?? "",
       seoKeywords: initial.seo.keywords ?? "",
@@ -106,18 +109,45 @@ export function AdminSettings({
             Mobile banking numbers shown on the add-funds page. Users send money to these numbers.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-3">
-          <div className="space-y-2">
-            <Label>bKash</Label>
-            <Input {...form.register("bKash")} placeholder="01XXXXXXXXX" />
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <Label>bKash</Label>
+              <Input {...form.register("bKash")} placeholder="01XXXXXXXXX" />
+            </div>
+            <div className="space-y-2">
+              <Label>Nagad</Label>
+              <Input {...form.register("nagad")} placeholder="01XXXXXXXXX" />
+            </div>
+            <div className="space-y-2">
+              <Label>Rocket</Label>
+              <Input {...form.register("rocket")} placeholder="01XXXXXXXXX" />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label>Nagad</Label>
-            <Input {...form.register("nagad")} placeholder="01XXXXXXXXX" />
-          </div>
-          <div className="space-y-2">
-            <Label>Rocket</Label>
-            <Input {...form.register("rocket")} placeholder="01XXXXXXXXX" />
+          <div className="grid gap-3 sm:grid-cols-3">
+            {(
+              [
+                { key: "bKash", label: "bKash" },
+                { key: "nagad", label: "Nagad" },
+                { key: "rocket", label: "Rocket" },
+              ] as const
+            ).map((m) => (
+              <div
+                key={m.key}
+                className="flex items-center justify-between rounded-lg border p-3"
+              >
+                <div>
+                  <p className="text-sm font-medium">{m.label}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {form.watch(`${m.key}Enabled`) ? "Visible to users" : "Hidden from users"}
+                  </p>
+                </div>
+                <Switch
+                  checked={form.watch(`${m.key}Enabled`)}
+                  onCheckedChange={(v) => form.setValue(`${m.key}Enabled`, v)}
+                />
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>

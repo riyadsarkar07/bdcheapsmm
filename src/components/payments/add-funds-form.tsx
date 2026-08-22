@@ -41,7 +41,7 @@ const formSchema = z.object({
   note: z.string().max(500).optional().or(z.literal("")),
 });
 
-const methods = [
+const allMethods = [
   { key: "bKash" as const, label: "bKash", color: "bg-pink-500" },
   { key: "nagad" as const, label: "Nagad", color: "bg-orange-500" },
   { key: "rocket" as const, label: "Rocket", color: "bg-purple-500" },
@@ -64,9 +64,15 @@ export function AddFundsForm({
   const [preview, setPreview] = React.useState<string | null>(null);
   const fileRef = React.useRef<HTMLInputElement>(null);
 
+  const enabledKeys = new Set(
+    payments.enabled?.length ? payments.enabled : ["bKash", "nagad", "rocket"]
+  );
+  const methods = allMethods.filter((m) => enabledKeys.has(m.key));
+  const defaultMethod = methods[0]?.key ?? "bKash";
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { method: "bKash", senderNumber: "", amount: undefined as unknown as number, transactionId: "", note: "" },
+    defaultValues: { method: defaultMethod, senderNumber: "", amount: undefined as unknown as number, transactionId: "", note: "" },
   });
 
   const method = form.watch("method");
@@ -111,7 +117,7 @@ export function AddFundsForm({
       });
       if (result.success) {
         toast.success("Payment request submitted! Awaiting approval.");
-        form.reset({ method: "bKash", senderNumber: "", amount: undefined as unknown as number, transactionId: "", note: "" });
+        form.reset({ method: defaultMethod, senderNumber: "", amount: undefined as unknown as number, transactionId: "", note: "" });
         setScreenshot(null);
         setPreview(null);
         router.refresh();
@@ -145,24 +151,30 @@ export function AddFundsForm({
               <FormItem>
                 <FormLabel>Payment Method</FormLabel>
                 <FormControl>
-                  <RadioGroup
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    className="grid grid-cols-3 gap-2"
-                  >
-                    {methods.map((m) => (
-                      <div key={m.key}>
-                        <RadioGroupItem value={m.key} id={`method-${m.key}`} className="peer sr-only" />
-                        <label
-                          htmlFor={`method-${m.key}`}
-                          className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border p-3 text-sm font-medium transition-colors peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10"
-                        >
-                          <span className={`h-2.5 w-2.5 rounded-full ${m.color}`} />
-                          {m.label}
-                        </label>
-                      </div>
-                    ))}
-                  </RadioGroup>
+                  {methods.length === 0 ? (
+                    <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+                      No payment methods are available right now. Please contact support.
+                    </div>
+                  ) : (
+                    <RadioGroup
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      className="grid grid-cols-3 gap-2"
+                    >
+                      {methods.map((m) => (
+                        <div key={m.key}>
+                          <RadioGroupItem value={m.key} id={`method-${m.key}`} className="peer sr-only" />
+                          <label
+                            htmlFor={`method-${m.key}`}
+                            className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border p-3 text-sm font-medium transition-colors peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10"
+                          >
+                            <span className={`h-2.5 w-2.5 rounded-full ${m.color}`} />
+                            {m.label}
+                          </label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  )}
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -300,7 +312,7 @@ export function AddFundsForm({
             )}
           </div>
 
-          <Button type="submit" variant="gradient" className="w-full" disabled={loading}>
+          <Button type="submit" variant="gradient" className="w-full" disabled={loading || methods.length === 0}>
             {loading ? <Loader2 className="animate-spin" /> : <Upload />}
             Submit Payment Request
           </Button>

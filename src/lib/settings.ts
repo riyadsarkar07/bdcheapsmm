@@ -80,7 +80,7 @@ const defaults: PublicSettings = {
     timezone: "Asia/Dhaka",
     maintenance_mode: false,
   },
-  payments: { bKash: "", nagad: "", rocket: "" },
+  payments: { bKash: "", nagad: "", rocket: "", enabled: ["bKash", "nagad", "rocket"] },
   seo: {
     title: "BD Cheap SMM - Buy Cheap SMM Services",
     description:

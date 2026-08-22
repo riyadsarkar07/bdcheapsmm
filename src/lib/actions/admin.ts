@@ -577,7 +577,14 @@ export async function updateSettingsAction(input: unknown): Promise<ActionResult
 
   await setSetting("site", { name: parsed.data.siteName, tagline: parsed.data.tagline, logo: parsed.data.logo, favicon: parsed.data.favicon }, true);
   await setSetting("general", { currency: parsed.data.currency, timezone: parsed.data.timezone, maintenance_mode: parsed.data.maintenanceMode }, true);
-  await setSetting("payments", { bKash: parsed.data.bKash, nagad: parsed.data.nagad, rocket: parsed.data.rocket }, true);
+  await setSetting("payments", {
+    bKash: parsed.data.bKash,
+    nagad: parsed.data.nagad,
+    rocket: parsed.data.rocket,
+    enabled: (["bKash", "nagad", "rocket"] as const).filter((m) =>
+      parsed.data[`${m}Enabled`]
+    ),
+  }, true);
   await setSetting("seo", {
     title: parsed.data.seoTitle,
     description: parsed.data.seoDescription,

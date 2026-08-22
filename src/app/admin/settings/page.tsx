@@ -14,7 +14,7 @@ export default async function AdminSettingsPage() {
   const [site, general, payments, seo, footer] = await Promise.all([
     getSetting<{ name: string; tagline: string; logo: string | null; favicon: string | null }>("site"),
     getSetting<{ currency: string; timezone: string; maintenance_mode: boolean }>("general"),
-    getSetting<{ bKash: string; nagad: string; rocket: string }>("payments"),
+    getSetting<{ bKash: string; nagad: string; rocket: string; enabled: string[] }>("payments"),
     getSetting<{ title: string; description: string; keywords: string }>("seo"),
     getSetting<{ text: string }>("footer"),
   ]);
@@ -22,7 +22,7 @@ export default async function AdminSettingsPage() {
   const defaults = {
     site: { name: "BD Cheap SMM", tagline: "", logo: null as string | null, favicon: null as string | null },
     general: { currency: "BDT", timezone: "Asia/Dhaka", maintenance_mode: false },
-    payments: { bKash: "", nagad: "", rocket: "" },
+    payments: { bKash: "", nagad: "", rocket: "", enabled: ["bKash", "nagad", "rocket"] },
     seo: { title: "", description: "", keywords: "" },
     footer: { text: "" },
   };

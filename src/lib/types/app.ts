@@ -69,6 +69,7 @@ export interface PaymentSettings {
   bKash: string;
   nagad: string;
   rocket: string;
+  enabled: string[];
 }
 
 export interface SeoSettings {

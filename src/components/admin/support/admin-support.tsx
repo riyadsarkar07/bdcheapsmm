@@ -32,7 +32,7 @@ type TicketRow = {
 
 export function AdminSupport({ tickets }: { tickets: TicketRow[] }) {
   const [search, setSearch] = React.useState("");
-  const [statusFilter, setStatusFilter] = React.useState("all");
+  const [statusFilter, setStatusFilter] = React.useState<TicketStatus>("waiting");
 
   const filtered = tickets.filter((t) => {
     const matchesSearch =
@@ -40,7 +40,7 @@ export function AdminSupport({ tickets }: { tickets: TicketRow[] }) {
       t.ticket_number.toLowerCase().includes(search.toLowerCase()) ||
       (t.profiles?.email ?? "").toLowerCase().includes(search.toLowerCase()) ||
       (t.profiles?.full_name ?? "").toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === "all" || t.status === statusFilter;
+    const matchesStatus = t.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
@@ -58,14 +58,13 @@ export function AdminSupport({ tickets }: { tickets: TicketRow[] }) {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as TicketStatus)}>
           <SelectTrigger className="w-44">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All ({tickets.length})</SelectItem>
-            <SelectItem value="open">Open</SelectItem>
             <SelectItem value="waiting">Waiting</SelectItem>
+            <SelectItem value="open">In Process</SelectItem>
             <SelectItem value="closed">Closed</SelectItem>
           </SelectContent>
         </Select>
