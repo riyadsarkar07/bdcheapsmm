@@ -1,3 +1,5 @@
+import { cache } from "react";
+import type { AuthUser } from "@supabase/supabase-js";
 import type { Profile } from "@/lib/types/database";
 
 export interface ActionResult<T = undefined> {
@@ -6,6 +8,38 @@ export interface ActionResult<T = undefined> {
   error?: string;
   data?: T;
 }
+
+interface SessionProfile {
+  user: AuthUser | null;
+  profile: Profile | null;
+}
+
+/**
+ * Fetch the authenticated user and profile once per request. The dashboard
+ * layout and every page both need the current user, so `cache()` collapses the
+ * two Supabase round-trips into one during a single server render. Each
+ * navigation / server action still gets a fresh result, so nothing goes stale.
+ */
+export const getSessionProfile = cache(
+  async function getSessionProfile(): Promise<SessionProfile> {
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user) return { user: null, profile: null };
+
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    return { user, profile: error || !profile ? null : (profile as Profile) };
+  }
+);
 
 export function ok<T>(data?: T, message?: string): ActionResult<T> {
   return { success: true, data, message };
@@ -25,25 +59,13 @@ export async function requireUser(): Promise<
   | { user: Profile; error?: undefined }
   | { user: null; error: string }
 > {
-  const { createClient } = await import("@/lib/supabase/server");
-  const supabase = await createClient();
+  const { user, profile } = await getSessionProfile();
 
-  const {
-    data: { user: authUser },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !authUser) {
+  if (!user) {
     return { user: null, error: "You must be logged in." };
   }
 
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", authUser.id)
-    .maybeSingle();
-
-  if (error || !profile) {
+  if (!profile) {
     return { user: null, error: "Profile not found." };
   }
 

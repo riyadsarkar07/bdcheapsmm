@@ -152,13 +152,8 @@ export function ServicesBrowser() {
         .maybeSingle();
       return data;
     },
-    staleTime: 0,
+    staleTime: 15_000,
     refetchInterval: 15_000,
-  });
-
-  const { data: authUser } = useQuery({
-    queryKey: ["auth-user"],
-    queryFn: async () => (await supabase.auth.getUser()).data.user,
   });
 
   const { data: favorites } = useQuery({
@@ -210,7 +205,7 @@ export function ServicesBrowser() {
   }
 
   async function toggleFavorite(serviceId: string, isFavorite: boolean) {
-    const uid = authUser?.id;
+    const uid = profile?.id;
     if (!uid) return;
     if (isFavorite) {
       await supabase.from("favorites").delete().eq("user_id", uid).eq("service_id", serviceId);
