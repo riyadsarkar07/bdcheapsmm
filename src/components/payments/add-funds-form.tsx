@@ -78,6 +78,26 @@ export function AddFundsForm({
   const method = form.watch("method");
   const methodNumber = payments[method] ?? "";
 
+  if (methods.length === 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="glass-card rounded-xl p-6"
+      >
+        <h2 className="mb-1 flex items-center gap-2 text-lg font-bold">
+          <Wallet className="h-5 w-5 text-primary" /> Make a Deposit
+        </h2>
+        <p className="mb-5 text-sm text-muted-foreground">
+          Send money to the number below, then fill in the form with your details.
+        </p>
+        <div className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground">
+          No payment methods are currently available. Please contact support.
+        </div>
+      </motion.div>
+    );
+  }
+
   async function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -151,30 +171,24 @@ export function AddFundsForm({
               <FormItem>
                 <FormLabel>Payment Method</FormLabel>
                 <FormControl>
-                  {methods.length === 0 ? (
-                    <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
-                      No payment methods are available right now. Please contact support.
-                    </div>
-                  ) : (
-                    <RadioGroup
-                      onValueChange={field.onChange}
-                      value={field.value}
-                      className="grid grid-cols-3 gap-2"
-                    >
-                      {methods.map((m) => (
-                        <div key={m.key}>
-                          <RadioGroupItem value={m.key} id={`method-${m.key}`} className="peer sr-only" />
-                          <label
-                            htmlFor={`method-${m.key}`}
-                            className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border p-3 text-sm font-medium transition-colors peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10"
-                          >
-                            <span className={`h-2.5 w-2.5 rounded-full ${m.color}`} />
-                            {m.label}
-                          </label>
-                        </div>
-                      ))}
-                    </RadioGroup>
-                  )}
+                  <RadioGroup
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    className="grid grid-cols-3 gap-2"
+                  >
+                    {methods.map((m) => (
+                      <div key={m.key}>
+                        <RadioGroupItem value={m.key} id={`method-${m.key}`} className="peer sr-only" />
+                        <label
+                          htmlFor={`method-${m.key}`}
+                          className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border p-3 text-sm font-medium transition-colors peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10"
+                        >
+                          <span className={`h-2.5 w-2.5 rounded-full ${m.color}`} />
+                          {m.label}
+                        </label>
+                      </div>
+                    ))}
+                  </RadioGroup>
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -312,7 +326,7 @@ export function AddFundsForm({
             )}
           </div>
 
-          <Button type="submit" variant="gradient" className="w-full" disabled={loading || methods.length === 0}>
+          <Button type="submit" variant="gradient" className="w-full" disabled={loading}>
             {loading ? <Loader2 className="animate-spin" /> : <Upload />}
             Submit Payment Request
           </Button>

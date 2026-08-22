@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/guards";
 import { getPublicSettings } from "@/lib/settings";
 import { resolveScreenshotUrls } from "@/lib/supabase/storage";
 import { PageHeader } from "@/components/page-header";
+import { AddFundsInstructions } from "@/components/payments/add-funds-instructions";
 import { AddFundsForm } from "@/components/payments/add-funds-form";
 import { PaymentHistory } from "@/components/payments/payment-history";
 
@@ -30,7 +31,8 @@ export default async function AddFundsPage() {
         title="Add Funds"
         description="Deposit money into your account using bKash, Nagad or Rocket."
       />
-      <div className="grid gap-6 lg:grid-cols-2">
+      <AddFundsInstructions />
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <AddFundsForm
           payments={settings.payments}
           currency={user.currency}
