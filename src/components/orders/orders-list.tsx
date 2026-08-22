@@ -71,9 +71,14 @@ export function OrdersList({
       )
       .subscribe();
 
+    // Polling fallback so status changes still surface when realtime events are
+    // not delivered. Reuses the same debounced refresh (no duplicate logic).
+    const poll = setInterval(refresh, 30_000);
+
     return () => {
       mounted = false;
       if (timer) clearTimeout(timer);
+      clearInterval(poll);
       supabase.removeChannel(channel);
     };
   }, [supabase, userId, statusFilter]);

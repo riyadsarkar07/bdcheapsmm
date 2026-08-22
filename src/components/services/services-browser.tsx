@@ -204,7 +204,9 @@ export function ServicesBrowser() {
     else if (next.p === "") params.delete("p");
     if (next.category) params.set("category", next.category);
     else if (next.category === null) params.delete("category");
-    router.push(`/services?${params.toString()}`);
+    // Keep the current scroll position when the filter changes so selecting a
+    // category shows its services in place instead of jumping to the top.
+    router.push(`/services?${params.toString()}`, { scroll: false });
   }
 
   async function toggleFavorite(serviceId: string, isFavorite: boolean) {
