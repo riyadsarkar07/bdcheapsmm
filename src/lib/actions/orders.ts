@@ -158,23 +158,29 @@ export async function createOrderAction(input: {
   // 3. Submit to provider
   // Provider credentials (api_url, api_key) are protected by RLS and only
   // readable by admins via the user-scoped client, so read them with the
-  // service-role client. This block runs server-side only.
-  const admin = createAdminClient();
-  const { data: provider, error: providerError } = await admin
-    .from("providers")
-    .select("id, name, api_url, api_key")
-    .eq("id", service.provider_id)
-    .single();
-
+  // service-role client. This block runs server-side only. Any failure in the
+  // lookup or the API call (including a missing service-role key) is recorded
+  // on the order instead of leaving it stuck in "pending" with no provider
+  // reference, and we never mark it submitted until the provider returns an id.
   let providerOrderId: string | null = null;
   let providerResponse: unknown = null;
   let status: OrderStatus = "processing";
 
-  if (providerError) {
-    status = "failed";
-    providerResponse = { error: providerError.message };
-  } else if (provider) {
-    try {
+  try {
+    const admin = createAdminClient();
+    const { data: provider, error: providerError } = await admin
+      .from("providers")
+      .select("id, name, api_url, api_key")
+      .eq("id", service.provider_id)
+      .single();
+
+    if (providerError) {
+      status = "failed";
+      providerResponse = { error: `Provider lookup failed: ${providerError.message}` };
+    } else if (!provider) {
+      status = "failed";
+      providerResponse = { error: "Provider missing" };
+    } else {
       const result = await providerApi.createOrder(provider, {
         service: Number(service.provider_service_id),
         link: parsed.data.link,
@@ -182,25 +188,14 @@ export async function createOrderAction(input: {
       });
       providerOrderId = String(result.order);
       providerResponse = result;
-    } catch (err) {
-      status = "failed";
-      const message = (err as Error).message;
-      providerResponse = { error: message };
-      await createNotification({
-        userId: user.id,
-        type: "order_status",
-        title: "Order submission failed",
-        body: `Order #${orderNumber} could not be submitted to provider: ${message}. Contact support for a refund.`,
-        link: `/orders/${order.id}`,
-      });
     }
-  } else {
+  } catch (err) {
     status = "failed";
-    providerResponse = { error: "Provider missing" };
+    providerResponse = { error: (err as Error).message };
   }
 
   // 4. Update order with provider result
-  await supabase
+  const { error: updateError } = await supabase
     .from("orders")
     .update({
       provider_order_id: providerOrderId,
@@ -209,6 +204,25 @@ export async function createOrderAction(input: {
       error_message: status === "failed" ? String((providerResponse as { error?: string })?.error ?? "Unknown error") : null,
     })
     .eq("id", order.id);
+
+  if (status === "failed") {
+    await createNotification({
+      userId: user.id,
+      type: "order_status",
+      title: "Order submission failed",
+      body: `Order #${orderNumber} could not be submitted to provider: ${String((providerResponse as { error?: string })?.error ?? "Unknown error")}. Contact support for a refund.`,
+      link: `/orders/${order.id}`,
+    });
+  } else if (updateError) {
+    await writeLog({
+      userId: user.id,
+      action: "order_create",
+      entityType: "orders",
+      entityId: order.id,
+      description: `Provider accepted order #${orderNumber} (id ${providerOrderId}) but saving the provider reference failed: ${updateError.message}`,
+      meta: { price, provider_order_id: providerOrderId, provider_submitted: true, save_error: updateError.message },
+    });
+  }
 
   await writeLog({
     userId: user.id,
@@ -225,6 +239,7 @@ export async function createOrderAction(input: {
       provider_order_id: providerOrderId,
       provider_submitted: status !== "failed",
       provider_response: providerResponse as Json,
+      save_error: updateError?.message ?? null,
     },
   });
 
