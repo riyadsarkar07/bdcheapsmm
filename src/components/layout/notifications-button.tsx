@@ -48,37 +48,53 @@ export function NotificationsButton() {
 
   React.useEffect(() => {
     let mounted = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    async function load() {
+    async function init() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!mounted) return;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
       const { data } = await supabase
         .from("notifications")
         .select("*")
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(20);
       if (!mounted) return;
       setNotifications(data ?? []);
       setUnread((data ?? []).filter((n) => !n.is_read).length);
       setLoading(false);
+
+      channel = supabase
+        .channel("notifications-realtime")
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            const notif = payload.new as Notification;
+            setNotifications((prev) => [notif, ...prev].slice(0, 20));
+            setUnread((prev) => prev + 1);
+          }
+        )
+        .subscribe();
     }
 
-    void load();
-
-    const channel = supabase
-      .channel("notifications-realtime")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications" },
-        (payload) => {
-          const notif = payload.new as Notification;
-          setNotifications((prev) => [notif, ...prev].slice(0, 20));
-          setUnread((prev) => prev + 1);
-        }
-      )
-      .subscribe();
+    void init();
 
     return () => {
       mounted = false;
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [supabase]);
 
