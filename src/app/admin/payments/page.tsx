@@ -49,7 +49,7 @@ export default async function AdminPaymentsPage() {
         title="Payment Requests"
         description="Approve or reject deposit requests. Approval credits the user's balance instantly."
       />
-      <AdminPayments payments={rows} />
+      <AdminPayments payments={resolved} />
     </div>
   );
 }
