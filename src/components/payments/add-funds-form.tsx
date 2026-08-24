@@ -16,6 +16,8 @@ import {
   MessageSquare,
   ImagePlus,
   CheckCircle2,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +34,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { submitPaymentAction } from "@/lib/actions/payments";
 import type { PaymentSettings } from "@/lib/types/app";
+import { BKashLogo, NagadLogo, RocketLogo } from "./brand-logos";
 
 const formSchema = z.object({
   method: z.enum(["bKash", "nagad", "rocket"]),
@@ -42,9 +45,14 @@ const formSchema = z.object({
 });
 
 const allMethods = [
-  { key: "bKash" as const, label: "bKash", color: "bg-pink-500" },
-  { key: "nagad" as const, label: "Nagad", color: "bg-orange-500" },
-  { key: "rocket" as const, label: "Rocket", color: "bg-purple-500" },
+  {
+    key: "bKash" as const,
+    label: "bKash",
+    accent: "#e2136e",
+    Logo: BKashLogo,
+  },
+  { key: "nagad" as const, label: "Nagad", accent: "#ed1c24", Logo: NagadLogo },
+  { key: "rocket" as const, label: "Rocket", accent: "#54a3da", Logo: RocketLogo },
 ];
 
 export function AddFundsForm({
@@ -77,6 +85,19 @@ export function AddFundsForm({
 
   const method = form.watch("method");
   const methodNumber = payments[method] ?? "";
+  const activeMethod = methods.find((m) => m.key === method) ?? methods[0]!;
+  const [copied, setCopied] = React.useState(false);
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(methodNumber);
+      setCopied(true);
+      toast.success(`${activeMethod.label} number copied`);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error("Could not copy the number. Please copy it manually.");
+    }
+  }
 
   if (methods.length === 0) {
     return (
@@ -176,18 +197,36 @@ export function AddFundsForm({
                     value={field.value}
                     className="grid grid-cols-3 gap-2"
                   >
-                    {methods.map((m) => (
-                      <div key={m.key}>
-                        <RadioGroupItem value={m.key} id={`method-${m.key}`} className="peer sr-only" />
-                        <label
-                          htmlFor={`method-${m.key}`}
-                          className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border p-3 text-sm font-medium transition-colors peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/10"
-                        >
-                          <span className={`h-2.5 w-2.5 rounded-full ${m.color}`} />
-                          {m.label}
-                        </label>
-                      </div>
-                    ))}
+                    {methods.map((m) => {
+                      const checked = field.value === m.key;
+                      return (
+                        <div key={m.key}>
+                          <RadioGroupItem
+                            value={m.key}
+                            id={`method-${m.key}`}
+                            className="peer sr-only"
+                          />
+                          <label
+                            htmlFor={`method-${m.key}`}
+                            className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border p-3 text-sm font-medium transition-all hover:bg-muted/40"
+                            style={{
+                              borderColor: checked ? m.accent : undefined,
+                              backgroundColor: checked
+                                ? `${m.accent}14`
+                                : undefined,
+                              boxShadow: checked
+                                ? `0 0 0 1px ${m.accent}`
+                                : undefined,
+                            }}
+                          >
+                            <span className="flex h-9 w-full items-center justify-center">
+                              <m.Logo className="h-5 w-auto max-w-full" />
+                            </span>
+                            <span>{m.label}</span>
+                          </label>
+                        </div>
+                      );
+                    })}
                   </RadioGroup>
                 </FormControl>
                 <FormMessage />
@@ -196,18 +235,42 @@ export function AddFundsForm({
           />
 
           {methodNumber ? (
-            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
-              <p className="font-medium">{method} Number:</p>
-              <p className="mt-1 flex items-center justify-between text-lg font-bold text-primary">
-                {methodNumber}
+            <div
+              className="rounded-xl border p-4"
+              style={{ borderColor: `${activeMethod.accent}4d` }}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span
+                    className="flex h-8 shrink-0 items-center rounded-md px-2.5"
+                    style={{ backgroundColor: `${activeMethod.accent}1a` }}
+                  >
+                    <activeMethod.Logo className="h-5 w-auto" />
+                  </span>
+                  <p className="truncate text-xs text-muted-foreground">
+                    Send money to this {activeMethod.label} number
+                  </p>
+                </div>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => navigator.clipboard.writeText(methodNumber)}
+                  onClick={handleCopy}
+                  className="shrink-0 gap-1.5"
                 >
-                  Copy
+                  {copied ? (
+                    <Check className="h-3.5 w-3.5 text-success" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                  {copied ? "Copied" : "Copy"}
                 </Button>
+              </div>
+              <p
+                className="mt-3 select-all text-3xl font-extrabold tracking-tight md:text-4xl"
+                style={{ color: activeMethod.accent }}
+              >
+                {methodNumber}
               </p>
             </div>
           ) : (
