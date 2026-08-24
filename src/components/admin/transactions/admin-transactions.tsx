@@ -13,7 +13,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { formatUsd, formatDateTime } from "@/lib/utils";
 import type { TransactionType } from "@/lib/types/database";
 
 type TransactionRow = {
@@ -114,11 +114,11 @@ export function AdminTransactions({ transactions }: { transactions: TransactionR
                         <td className="px-4 py-3 text-right font-semibold">
                           <span className={isCredit ? "text-success" : "text-destructive"}>
                             {isCredit ? "+" : "−"}
-                            {formatCurrency(Math.abs(signed), transaction.currency)}
+                            {formatUsd(Math.abs(signed))}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right text-muted-foreground">
-                          {transaction.balance_after != null ? formatCurrency(transaction.balance_after, transaction.currency) : "—"}
+                          {transaction.balance_after != null ? formatUsd(transaction.balance_after) : "—"}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">
                           {formatDateTime(transaction.created_at, "MMM d, h:mm a")}
