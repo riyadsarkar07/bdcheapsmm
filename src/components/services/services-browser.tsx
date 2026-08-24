@@ -95,6 +95,8 @@ export function ServicesBrowser() {
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [limit, setLimit] = React.useState(PAGE_SIZE);
   const detailRef = React.useRef<HTMLDivElement>(null);
+  const servicesRef = React.useRef<HTMLDivElement>(null);
+  const prevCategory = React.useRef<string | null>(category);
 
   React.useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
@@ -187,6 +189,22 @@ export function ServicesBrowser() {
       return (data ?? []) as ServiceRow[];
     },
   });
+
+  // After a category is selected, smooth-scroll to the services section once its
+  // services have loaded so the results are in view without jumping to the top.
+  // Only scrolls on a real category selection (not on mount or search changes).
+  React.useEffect(() => {
+    if (!category) {
+      prevCategory.current = null;
+      return;
+    }
+    if (prevCategory.current === category || isLoading) return;
+    prevCategory.current = category;
+    const raf = requestAnimationFrame(() => {
+      servicesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [category, isLoading]);
 
   // The selection always comes from the loaded list (which now includes the
   // provider embed), so derive it instead of issuing a second DB query.
@@ -339,7 +357,7 @@ export function ServicesBrowser() {
       </AnimatePresence>
 
       {/* Search */}
-      <div className="relative mb-6 max-w-md">
+      <div ref={servicesRef} className="relative mb-6 max-w-md scroll-mt-20">
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Search services..."
