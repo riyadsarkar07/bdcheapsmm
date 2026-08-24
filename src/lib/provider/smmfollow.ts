@@ -124,10 +124,15 @@ function providerErrorMessage(data: Record<string, unknown>): string | null {
   return null;
 }
 
-function assertProviderOk(data: Record<string, unknown>, fallback: string): void {
-  const message = providerErrorMessage(data);
-  if (message) throw new ProviderError(message);
-  if (data.error) throw new ProviderError(fallback);
+/**
+ * Throw a ProviderError when `data` has no success indicator. Success is
+ * decided by each action's own expected field (e.g. `order`, `status`,
+ * `refill`, `balance`), so a successful response that happens to include a
+ * `message` field is never misread as a failure, while genuine rejections
+ * surface the provider's exact error text.
+ */
+function assertProviderFailed(data: Record<string, unknown>, fallback: string): void {
+  throw new ProviderError(providerErrorMessage(data) ?? fallback);
 }
 
 /** SMMFollow-compatible provider SDK. */
@@ -136,8 +141,10 @@ export const providerApi = {
     provider: Pick<Provider, "api_url" | "api_key" | "name">
   ): Promise<ProviderServiceItem[]> {
     const data = await post(provider, "services");
-    assertProviderOk(data, "Failed to fetch services");
-    return (Array.isArray(data) ? data : data.services ?? []) as ProviderServiceItem[];
+    if (Array.isArray(data)) return data as ProviderServiceItem[];
+    if (Array.isArray(data.services)) return data.services as ProviderServiceItem[];
+    assertProviderFailed(data, "Failed to fetch services");
+    return [];
   },
 
   async createOrder(
@@ -149,10 +156,9 @@ export const providerApi = {
       link: params.link,
       quantity: params.quantity,
     });
-    assertProviderOk(data, "Order failed");
     const order = Number(data.order);
     if (!order || Number.isNaN(order)) {
-      throw new ProviderError("Provider did not return an order id");
+      assertProviderFailed(data, "Provider did not return an order id");
     }
     return { order, ...data } as unknown as ProviderOrderResult;
   },
@@ -162,7 +168,9 @@ export const providerApi = {
     providerOrderId: string | number
   ): Promise<ProviderStatusResult> {
     const data = await post(provider, "status", { order: providerOrderId });
-    assertProviderOk(data, "Status lookup failed");
+    if (typeof data.status !== "string" || !data.status) {
+      assertProviderFailed(data, "Status lookup failed");
+    }
     return data as unknown as ProviderStatusResult;
   },
 
@@ -171,7 +179,9 @@ export const providerApi = {
     providerOrderId: string | number
   ): Promise<{ refill: boolean; message?: string }> {
     const data = await post(provider, "refill", { order: providerOrderId });
-    assertProviderOk(data, "Refill failed");
+    if (data.refill === undefined) {
+      assertProviderFailed(data, "Refill failed");
+    }
     return data as unknown as { refill: boolean; message?: string };
   },
 
@@ -180,7 +190,9 @@ export const providerApi = {
     providerOrderId: string | number
   ): Promise<{ cancelled: boolean; message?: string }> {
     const data = await post(provider, "cancel", { orders: providerOrderId });
-    assertProviderOk(data, "Cancel failed");
+    if (!Array.isArray(data) && data.cancel === undefined && data.cancelled === undefined) {
+      assertProviderFailed(data, "Cancel failed");
+    }
     return data as unknown as { cancelled: boolean; message?: string };
   },
 
@@ -188,10 +200,13 @@ export const providerApi = {
     provider: Pick<Provider, "api_url" | "api_key" | "name">
   ): Promise<ProviderBalanceResult> {
     const data = await post(provider, "balance");
-    assertProviderOk(data, "Balance lookup failed");
+    const balance = Number(data.balance);
+    if (Number.isNaN(balance)) {
+      assertProviderFailed(data, "Balance lookup failed");
+    }
     return {
       ...data,
-      balance: Number(data.balance),
+      balance,
     } as unknown as ProviderBalanceResult;
   },
 };

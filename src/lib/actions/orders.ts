@@ -170,7 +170,7 @@ export async function createOrderAction(input: {
     const admin = createAdminClient();
     const { data: provider, error: providerError } = await admin
       .from("providers")
-      .select("id, name, api_url, api_key")
+      .select("id, name, api_url, api_key, status")
       .eq("id", service.provider_id)
       .single();
 
@@ -180,6 +180,9 @@ export async function createOrderAction(input: {
     } else if (!provider) {
       status = "failed";
       providerResponse = { error: "Provider missing" };
+    } else if (provider.status !== "active") {
+      status = "failed";
+      providerResponse = { error: `Provider "${provider.name}" is not active.` };
     } else {
       const result = await providerApi.createOrder(provider, {
         service: Number(service.provider_service_id),
@@ -194,16 +197,23 @@ export async function createOrderAction(input: {
     providerResponse = { error: (err as Error).message };
   }
 
-  // 4. Update order with provider result
-  const { error: updateError } = await supabase
-    .from("orders")
-    .update({
-      provider_order_id: providerOrderId,
-      provider_response: providerResponse as never,
-      status,
-      error_message: status === "failed" ? String((providerResponse as { error?: string })?.error ?? "Unknown error") : null,
-    })
-    .eq("id", order.id);
+  // 4. Update order with provider result. The user-scoped client can fail an
+  // update (RLS/session hiccup); if it does, retry with the service-role client
+  // so an order the provider accepted is never left stuck in "pending" without
+  // its provider reference.
+  const updates = {
+    provider_order_id: providerOrderId,
+    provider_response: providerResponse as never,
+    status,
+    error_message: status === "failed" ? String((providerResponse as { error?: string })?.error ?? "Unknown error") : null,
+  };
+  let updateError: { message: string } | null = null;
+  const firstUpdate = await supabase.from("orders").update(updates).eq("id", order.id);
+  if (firstUpdate.error) {
+    updateError = firstUpdate.error;
+    const retryUpdate = await createAdminClient().from("orders").update(updates).eq("id", order.id);
+    if (!retryUpdate.error) updateError = null;
+  }
 
   if (status === "failed") {
     await createNotification({
