@@ -148,7 +148,7 @@ export function AppShell({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 rounded-full outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring">
-                  <Avatar className="h-8 w-8">
+                  <Avatar className="h-9 w-9 ring-2 ring-background">
                     <AvatarImage src={profile.avatar_url ?? undefined} alt={profile.full_name ?? ""} />
                     <AvatarFallback>{getInitials(profile.full_name)}</AvatarFallback>
                   </Avatar>
