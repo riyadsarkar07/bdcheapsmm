@@ -10,7 +10,36 @@ import { providerApi } from "@/lib/provider/smmfollow";
 import { computeOrderCharge, round2 } from "@/lib/pricing";
 import { writeLog } from "@/lib/audit";
 import { createNotification } from "@/lib/notify";
-import type { Json, OrderStatus } from "@/lib/types/database";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Json, Order, OrderStatus } from "@/lib/types/database";
+
+/**
+ * Update an order and VERIFY the row was actually changed. supabase-js returns
+ * `{ data: null, error: null }` when PostgREST reports success but 0 rows were
+ * matched (e.g. RLS filtered the row), so an update without a `select()` can
+ * silently no-op and the caller would think the write succeeded. This helper
+ * returns `ok:false` whenever the row was not updated, so the caller can fall
+ * back to a service-role client.
+ */
+async function updateOrderVerified(
+  client: SupabaseClient<Database>,
+  orderId: string,
+  updates: Partial<Order>
+): Promise<{ ok: boolean; error: { message: string } | null }> {
+  try {
+    const res = await client
+      .from("orders")
+      .update(updates)
+      .eq("id", orderId)
+      .select("id")
+      .maybeSingle();
+    if (res.error) return { ok: false, error: res.error };
+    if (!res.data) return { ok: false, error: { message: "Order update did not affect any row." } };
+    return { ok: true, error: null };
+  } catch (err) {
+    return { ok: false, error: { message: (err as Error).message } };
+  }
+}
 
 export async function createOrderAction(input: {
   serviceId: string;
@@ -137,21 +166,27 @@ export async function createOrderAction(input: {
     return fail("Insufficient balance at charge time. Order cancelled.");
   }
 
-  // 2b. Record coupon usage so usage limits are enforced
+  // 2b. Record coupon usage so usage limits are enforced. Best-effort: a
+  // bookkeeping failure here must not abort the order after the charge has
+  // been applied, which would leave the order stuck in "pending".
   if (couponDiscount > 0 && parsed.data.coupon) {
-    const { data: coupon } = await supabase
-      .from("coupons")
-      .select("id")
-      .eq("code", parsed.data.coupon.trim())
-      .maybeSingle();
-    if (coupon) {
-      await supabase.rpc("use_coupon", {
-        p_user_id: user.id,
-        p_coupon_id: coupon.id,
-        p_balance_after: user.balance - price,
-        p_currency: user.currency,
-        p_description: `Coupon discount applied (${parsed.data.coupon.trim()})`,
-      });
+    try {
+      const { data: coupon } = await supabase
+        .from("coupons")
+        .select("id")
+        .eq("code", parsed.data.coupon.trim())
+        .maybeSingle();
+      if (coupon) {
+        await supabase.rpc("use_coupon", {
+          p_user_id: user.id,
+          p_coupon_id: coupon.id,
+          p_balance_after: user.balance - price,
+          p_currency: user.currency,
+          p_description: `Coupon discount applied (${parsed.data.coupon.trim()})`,
+        });
+      }
+    } catch {
+      // Non-fatal: coupon usage tracking failed, order still proceeds.
     }
   }
 
@@ -164,6 +199,7 @@ export async function createOrderAction(input: {
   // reference, and we never mark it submitted until the provider returns an id.
   let providerOrderId: string | null = null;
   let providerResponse: unknown = null;
+  let providerName: string | null = null;
   let status: OrderStatus = "processing";
 
   try {
@@ -190,29 +226,44 @@ export async function createOrderAction(input: {
         quantity: qty,
       });
       providerOrderId = String(result.order);
-      providerResponse = result;
+      providerName = provider.name;
+      providerResponse = {
+        provider_id: provider.id,
+        provider_name: provider.name,
+        provider_order_id: providerOrderId,
+        ...result,
+      };
     }
   } catch (err) {
     status = "failed";
     providerResponse = { error: (err as Error).message };
   }
 
-  // 4. Update order with provider result. The user-scoped client can fail an
-  // update (RLS/session hiccup); if it does, retry with the service-role client
-  // so an order the provider accepted is never left stuck in "pending" without
-  // its provider reference.
+  // 4. Persist the provider reference atomically with the status. The
+  // user-scoped client can fail an update OR silently match 0 rows (RLS
+  // filtering returns 200 with no error), so every write is verified to have
+  // actually changed the row. On failure or no-op, retry with the service-role
+  // client, which bypasses RLS and is the authoritative writer. This guarantees
+  // an order the provider accepted is never left stuck in "pending" without
+  // its provider_order_id.
   const updates = {
     provider_order_id: providerOrderId,
+    provider_id: service.provider_id,
     provider_response: providerResponse as never,
     status,
     error_message: status === "failed" ? String((providerResponse as { error?: string })?.error ?? "Unknown error") : null,
   };
   let updateError: { message: string } | null = null;
-  const firstUpdate = await supabase.from("orders").update(updates).eq("id", order.id);
-  if (firstUpdate.error) {
-    updateError = firstUpdate.error;
-    const retryUpdate = await createAdminClient().from("orders").update(updates).eq("id", order.id);
-    if (!retryUpdate.error) updateError = null;
+  const firstWrite = await updateOrderVerified(supabase, order.id, updates);
+  if (!firstWrite.ok) {
+    const firstError = firstWrite.error?.message ?? "Order update failed.";
+    updateError = { message: firstError };
+    try {
+      const retryWrite = await updateOrderVerified(createAdminClient(), order.id, updates);
+      if (retryWrite.ok) updateError = null;
+    } catch (err) {
+      updateError = { message: `${firstError} (service-role retry failed: ${(err as Error).message})` };
+    }
   }
 
   if (status === "failed") {
@@ -247,13 +298,22 @@ export async function createOrderAction(input: {
     meta: {
       price,
       provider_order_id: providerOrderId,
+      provider_name: providerName,
       provider_submitted: status !== "failed",
       provider_response: providerResponse as Json,
       save_error: updateError?.message ?? null,
     },
   });
 
-  return ok({ orderId: order.id, orderNumber });
+  // If the provider accepted the order but every DB write failed, surface a
+  // clear warning so the order is never silently left in "pending" with no
+  // provider reference. The log entry above records the full failure.
+  return ok(
+    { orderId: order.id, orderNumber },
+    updateError
+      ? `Order #${orderNumber} was submitted to the provider but the status could not be saved yet: ${updateError.message}`
+      : undefined
+  );
 }
 
 async function checkCouponUsage(userId: string, couponId: string): Promise<number> {
@@ -463,12 +523,21 @@ export async function retryFailedOrderAction(orderId: string): Promise<ActionRes
       link: order.link,
       quantity: order.quantity,
     });
-    await supabase.from("orders").update({
-      status: "processing",
+    const updates = {
+      status: "processing" as OrderStatus,
       provider_order_id: String(result.order),
       provider_response: result as never,
       error_message: null,
-    }).eq("id", orderId);
+    };
+    const firstWrite = await updateOrderVerified(supabase, orderId, updates);
+    if (!firstWrite.ok) {
+      const retryWrite = await updateOrderVerified(createAdminClient(), orderId, updates);
+      if (!retryWrite.ok) {
+        throw new Error(
+          `Provider accepted the order but saving the reference failed: ${retryWrite.error?.message ?? "unknown error"}`
+        );
+      }
+    }
     await writeLog({
       userId: user.id,
       action: "order_retry",

@@ -6,6 +6,8 @@ import { OrderDetailClient } from "@/components/orders/order-detail-client";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 
+export const maxDuration = 60;
+
 export default async function OrderDetailPage({
   params,
 }: {

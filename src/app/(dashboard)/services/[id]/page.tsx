@@ -10,6 +10,8 @@ import { ArrowLeft, Clock, Minus, Plus, Info } from "lucide-react";
 import { formatUsd } from "@/lib/utils";
 import { detectPlatform, exampleLinkForPlatform } from "@/lib/pricing";
 
+export const maxDuration = 60;
+
 export default async function ServiceOrderPage({
   params,
 }: {
