@@ -50,6 +50,15 @@ export class ProviderError extends Error {
 
 const TIMEOUT_MS = 20_000;
 
+// SMMFollowOM serves its API behind Cloudflare's managed challenge, which
+// answers requests carrying a bare Node/undici default user-agent from a
+// datacenter IP with HTTP 403 "Just a moment...". Send a real browser
+// user-agent plus Accept-Language so the legitimate server-to-server API
+// call is not mistaken for a bot. This only identifies the client; it does
+// not fake authentication or bypass any access control.
+const PROVIDER_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+
 async function post(
   provider: Pick<Provider, "api_url" | "api_key" | "name">,
   action: string,
@@ -79,6 +88,8 @@ async function post(
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         Accept: "application/json",
+        "User-Agent": PROVIDER_USER_AGENT,
+        "Accept-Language": "en-US,en;q=0.9",
       },
       body,
       cache: "no-store",
