@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { providerApi, isKnownOrderStatus, normalizeProviderStatus } from "@/lib/provider/smmfollow";
+import {
+  providerApi,
+  isKnownOrderStatus,
+  normalizeProviderCount,
+  normalizeProviderStatus,
+} from "@/lib/provider/smmfollow";
 import type { OrderStatus } from "@/lib/types/database";
 
 /**
@@ -68,16 +73,16 @@ export async function GET(request: Request) {
       if (["completed", "partial", "cancelled", "refunded", "failed"].includes(status)) {
         await supabase.from("orders").update({
           status,
-          start_count: result.start_count ?? null,
-          remain: result.remain ?? null,
+          start_count: normalizeProviderCount(result.start_count),
+          remain: normalizeProviderCount(result.remain),
           provider_response: result as never,
         }).eq("id", order.id);
         updated++;
       } else if (status !== order.status) {
         await supabase.from("orders").update({
           status,
-          start_count: result.start_count ?? null,
-          remain: result.remain ?? null,
+          start_count: normalizeProviderCount(result.start_count),
+          remain: normalizeProviderCount(result.remain),
         }).eq("id", order.id);
         updated++;
       }

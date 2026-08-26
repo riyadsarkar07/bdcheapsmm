@@ -433,15 +433,17 @@ export async function refreshOrderStatusAction(orderId: string): Promise<ActionR
 
   try {
     const result = await providerApi.getStatus(provider, order.provider_order_id);
-    const { normalizeProviderStatus, isKnownOrderStatus } = await import("@/lib/provider/smmfollow");
+    const { normalizeProviderStatus, isKnownOrderStatus, normalizeProviderCount } = await import(
+      "@/lib/provider/smmfollow"
+    );
     const status = normalizeProviderStatus(result.status) as OrderStatus;
     if (!isKnownOrderStatus(status)) {
       return fail(`Provider returned an unrecognized status for this order: "${result.status}".`);
     }
     const updates = {
       status,
-      start_count: result.start_count ?? null,
-      remain: result.remain ?? null,
+      start_count: normalizeProviderCount(result.start_count),
+      remain: normalizeProviderCount(result.remain),
       provider_response: result as never,
     };
     const firstWrite = await updateOrderVerified(supabase, orderId, updates);

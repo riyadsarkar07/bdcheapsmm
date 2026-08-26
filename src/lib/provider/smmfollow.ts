@@ -24,9 +24,9 @@ export interface ProviderOrderResult {
 
 export interface ProviderStatusResult {
   status: "Pending" | "In progress" | "Completed" | "Partial" | "Canceled" | "Refunded" | string;
-  start_count?: number;
-  remain?: number;
-  charge?: number;
+  start_count?: number | string | null;
+  remain?: number | string | null;
+  charge?: number | string | null;
   error?: boolean;
   message?: string;
   refill?: { status: string };
@@ -250,6 +250,21 @@ export function normalizeProviderStatus(status: string): string {
   if (lower.includes("processing")) return "processing";
   if (lower.includes("reject")) return "rejected";
   return status;
+}
+
+/**
+ * Normalize an SMM provider count field (e.g. start_count / remain) before it
+ * is written to an integer column. Providers return "" or null for counts on
+ * in-flight orders, and Postgres rejects "" for an int column. Empty, missing,
+ * or non-numeric values become null; valid integers (including 0) are
+ * preserved.
+ */
+export function normalizeProviderCount(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const n = typeof value === "number" ? value : Number(String(value).trim());
+  if (!Number.isFinite(n)) return null;
+  return Math.trunc(n);
 }
 
 export function parseServiceType(type: string): string {
