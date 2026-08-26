@@ -1,0 +1,37 @@
+name: Order Status Poll
+
+on:
+  schedule:
+    # Poll provider order statuses every 10 minutes.
+    # Vercel Hobby crons are limited to once per day, so this GitHub Actions
+    # scheduler is the frequent automatic poller for /api/cron/order-status.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: order-status-poll
+  cancel-in-progress: false
+
+env:
+  # Production base URL of the deployed app. Override with the repository
+  # variable PROD_BASE_URL (must include the protocol) if the domain differs.
+  BASE_URL: ${{ vars.PROD_BASE_URL || 'https://bdcheapsmm.vercel.app' }}
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger order status sync
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRON_SECRET is not configured as a GitHub Actions repository secret; add it so the poll authenticates with the cron endpoint."
+            exit 1
+          fi
+          curl -fsS --max-time 120 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${BASE_URL}/api/cron/order-status"

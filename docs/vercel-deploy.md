@@ -29,14 +29,20 @@ In **Project → Settings → Environment Variables**, add all variables from `.
 
 Apply them to **Production**, **Preview**, and **Development** environments, then redeploy.
 
-## 4. Cron job (order status polling)
+## 4. Order status polling
 
-The `vercel.json` at the repo root registers a cron that hits `/api/cron/order-status` once per day so provider order statuses stay in sync.
+Provider order statuses are synced by the `/api/cron/order-status` endpoint, which is triggered by two schedulers:
 
-- The route only accepts requests with `Authorization: Bearer <CRON_SECRET>`.
-- Vercel **Hobby** plans allow cron jobs at most **once per day** (schedule `0 0 * * *`, UTC); more frequent expressions such as `*/5 * * * *` fail deployment.
-- On Hobby, the cron runs at the scheduled hour with ±59 minute timing precision.
-- If your app needs status updates more often than once per day, do **not** add another Vercel cron (Hobby is daily-only). Instead, keep the Hobby cron as a daily fallback and trigger `/api/cron/order-status` on demand from the app after order actions, or use an external scheduler such as GitHub Actions / cron-job.org calling the endpoint with the `Authorization` header.
+1. **GitHub Actions** (`.github/workflows/order-status-poll.yml`) — the frequent poller, runs every 10 minutes via a scheduled workflow. It calls the endpoint with `Authorization: Bearer <CRON_SECRET>`.
+2. **Vercel Cron** (`vercel.json`) — a daily fallback at `0 0 * * *` UTC. Vercel Hobby plans allow cron jobs at most **once per day**; more frequent expressions such as `*/5 * * * *` fail deployment on Hobby.
+
+Setup requirements:
+
+- **GitHub Actions secret** — add `CRON_SECRET` (the same value as the Vercel env var) as a repository secret, otherwise the poller fails with a clear error.
+- **Repository variable** (optional) — set `PROD_BASE_URL` (with protocol, e.g. `https://your-app.vercel.app`) if the production domain differs from the workflow default.
+- **Endpoint auth** — the route accepts `Authorization: Bearer <CRON_SECRET>` from external schedulers, and also accepts Vercel's own cron invocations (user agent `vercel-cron/1.0`, which carry no Authorization header). This is required because Vercel cron requests do not include custom headers.
+
+Because the frequent poller runs off-Vercel, status updates stay automatic on any Vercel plan.
 
 ## 5. Auth callback URLs
 

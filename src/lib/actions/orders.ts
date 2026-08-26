@@ -433,14 +433,26 @@ export async function refreshOrderStatusAction(orderId: string): Promise<ActionR
 
   try {
     const result = await providerApi.getStatus(provider, order.provider_order_id);
-    const { normalizeProviderStatus } = await import("@/lib/provider/smmfollow");
+    const { normalizeProviderStatus, isKnownOrderStatus } = await import("@/lib/provider/smmfollow");
     const status = normalizeProviderStatus(result.status) as OrderStatus;
-    await supabase.from("orders").update({
+    if (!isKnownOrderStatus(status)) {
+      return fail(`Provider returned an unrecognized status for this order: "${result.status}".`);
+    }
+    const updates = {
       status,
       start_count: result.start_count ?? null,
       remain: result.remain ?? null,
       provider_response: result as never,
-    }).eq("id", orderId);
+    };
+    const firstWrite = await updateOrderVerified(supabase, orderId, updates);
+    if (!firstWrite.ok) {
+      const retryWrite = await updateOrderVerified(createAdminClient(), orderId, updates);
+      if (!retryWrite.ok) {
+        return fail(
+          `Provider reported "${result.status}" but saving it failed: ${retryWrite.error?.message ?? "unknown error"}`
+        );
+      }
+    }
     return ok({ status });
   } catch (err) {
     return fail((err as Error).message);

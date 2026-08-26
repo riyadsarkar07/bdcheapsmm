@@ -211,6 +211,22 @@ export const providerApi = {
   },
 };
 
+const KNOWN_ORDER_STATUSES = [
+  "pending",
+  "processing",
+  "in_progress",
+  "completed",
+  "partial",
+  "cancelled",
+  "refunded",
+  "failed",
+  "rejected",
+] as const;
+
+export function isKnownOrderStatus(status: string): boolean {
+  return (KNOWN_ORDER_STATUSES as readonly string[]).includes(status);
+}
+
 export function normalizeProviderStatus(status: string): string {
   const lower = status.toLowerCase();
   if (lower.includes("complete")) return "completed";

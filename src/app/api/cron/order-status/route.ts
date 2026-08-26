@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { providerApi, normalizeProviderStatus } from "@/lib/provider/smmfollow";
+import { providerApi, isKnownOrderStatus, normalizeProviderStatus } from "@/lib/provider/smmfollow";
 import type { OrderStatus } from "@/lib/types/database";
 
 /**
- * Vercel Cron job - polls providers for order status updates.
- * Configure in vercel.json:
- *   "crons": [{ "path": "/api/cron/order-status", "schedule": "once per day" }]
+ * Order status polling endpoint - polls providers for order status updates and
+ * writes the latest status to the orders table. Invoked by:
+ *  - GitHub Actions workflow .github/workflows/order-status-poll.yml (every 10 minutes)
+ *  - Vercel Cron (vercel.json) as a daily fallback
  *
- * Vercel Hobby plan cron jobs are limited to a once-per-day schedule.
+ * Auth: accepts `Authorization: Bearer <CRON_SECRET>` (external schedulers) or
+ * Vercel's own cron invocations (identified by the `vercel-cron/1.0` user agent,
+ * which carry no Authorization header).
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +19,10 @@ export const maxDuration = 60;
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const userAgent = request.headers.get("user-agent") ?? "";
+  const isVercelCron =
+    userAgent.startsWith("vercel-cron/") || request.headers.get("x-vercel-cron-schedule") !== null;
+  if (process.env.CRON_SECRET && !isVercelCron && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -53,6 +59,11 @@ export async function GET(request: Request) {
     try {
       const result = await providerApi.getStatus(provider, order.provider_order_id);
       const status = normalizeProviderStatus(result.status) as OrderStatus;
+
+      if (!isKnownOrderStatus(status)) {
+        // Unmapped provider status - skip to avoid writing an invalid enum value.
+        continue;
+      }
 
       if (["completed", "partial", "cancelled", "refunded", "failed"].includes(status)) {
         await supabase.from("orders").update({
