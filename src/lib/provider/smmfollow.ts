@@ -26,6 +26,8 @@ export interface ProviderStatusResult {
   status: "Pending" | "In progress" | "Completed" | "Partial" | "Canceled" | "Refunded" | string;
   start_count?: number | string | null;
   remain?: number | string | null;
+  /** Some SMMFollow-style APIs return the remaining quantity as `remains`. */
+  remains?: number | string | null;
   charge?: number | string | null;
   error?: boolean;
   message?: string;
@@ -265,6 +267,25 @@ export function normalizeProviderCount(value: unknown): number | null {
   const n = typeof value === "number" ? value : Number(String(value).trim());
   if (!Number.isFinite(n)) return null;
   return Math.trunc(n);
+}
+
+/**
+ * Merge the provider's count fields (start_count / remain) into the values
+ * already saved on an order. A valid numeric count from the provider is saved;
+ * empty/missing values ("", null, absent) keep the previously saved value so a
+ * valid start count is never wiped while an order is still in flight. Handles
+ * both the `remain` and `remains` provider field names.
+ */
+export function mergeProviderCounts(
+  result: ProviderStatusResult,
+  existing: { start_count: number | null; remain: number | null }
+): { start_count: number | null; remain: number | null } {
+  const startCount = normalizeProviderCount(result.start_count);
+  const remain = normalizeProviderCount(result.remain ?? result.remains);
+  return {
+    start_count: startCount ?? existing.start_count,
+    remain: remain ?? existing.remain,
+  };
 }
 
 export function parseServiceType(type: string): string {

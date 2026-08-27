@@ -68,7 +68,13 @@ export function OrderDetailClient({
                 : "Order retried"
         );
         if (name === "refresh" && result.data) {
-          setOrderState((prev) => ({ ...prev, status: (result.data as { status: OrderStatus }).status }));
+          const data = result.data as { status: OrderStatus; start_count: number | null; remain: number | null };
+          setOrderState((prev) => ({
+            ...prev,
+            status: data.status,
+            start_count: data.start_count,
+            remain: data.remain,
+          }));
         }
         router.refresh();
       } else {

@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   providerApi,
   isKnownOrderStatus,
-  normalizeProviderCount,
+  mergeProviderCounts,
   normalizeProviderStatus,
 } from "@/lib/provider/smmfollow";
 import type { OrderStatus } from "@/lib/types/database";
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
 
   const { data: orders, error } = await supabase
     .from("orders")
-    .select("id, provider_id, provider_order_id, status")
+    .select("id, provider_id, provider_order_id, status, start_count, remain")
     .in("status", ["pending", "processing", "in_progress"])
     .not("provider_order_id", "is", null);
 
@@ -70,19 +70,25 @@ export async function GET(request: Request) {
         continue;
       }
 
-      if (["completed", "partial", "cancelled", "refunded", "failed"].includes(status)) {
+      // Persist provider counts on every poll. A valid numeric value wins; an
+      // empty/missing value keeps the previously saved one so a start count is
+      // never wiped while the order is still in flight.
+      const counts = mergeProviderCounts(result, {
+        start_count: order.start_count ?? null,
+        remain: order.remain ?? null,
+      });
+      const isTerminal = ["completed", "partial", "cancelled", "refunded", "failed"].includes(status);
+      const statusChanged = status !== order.status;
+      const countsChanged =
+        counts.start_count !== (order.start_count ?? null) ||
+        counts.remain !== (order.remain ?? null);
+
+      if (isTerminal || statusChanged || countsChanged) {
         await supabase.from("orders").update({
           status,
-          start_count: normalizeProviderCount(result.start_count),
-          remain: normalizeProviderCount(result.remain),
-          provider_response: result as never,
-        }).eq("id", order.id);
-        updated++;
-      } else if (status !== order.status) {
-        await supabase.from("orders").update({
-          status,
-          start_count: normalizeProviderCount(result.start_count),
-          remain: normalizeProviderCount(result.remain),
+          start_count: counts.start_count,
+          remain: counts.remain,
+          ...(isTerminal ? { provider_response: result as never } : {}),
         }).eq("id", order.id);
         updated++;
       }

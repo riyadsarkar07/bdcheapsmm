@@ -405,7 +405,9 @@ export async function cancelOrderAction(orderId: string): Promise<ActionResult> 
   return ok(undefined, "Order cancelled and refunded.");
 }
 
-export async function refreshOrderStatusAction(orderId: string): Promise<ActionResult<{ status: OrderStatus }>> {
+export async function refreshOrderStatusAction(
+  orderId: string
+): Promise<ActionResult<{ status: OrderStatus; start_count: number | null; remain: number | null }>> {
   const { user, error } = await requireUser();
   if (error || !user) return fail(error ?? "Not authenticated");
 
@@ -414,7 +416,7 @@ export async function refreshOrderStatusAction(orderId: string): Promise<ActionR
 
   const { data: order } = await supabase
     .from("orders")
-    .select("id, user_id, status, provider_id, provider_order_id, order_number")
+    .select("id, user_id, status, provider_id, provider_order_id, order_number, start_count, remain")
     .eq("id", orderId)
     .single();
 
@@ -433,17 +435,21 @@ export async function refreshOrderStatusAction(orderId: string): Promise<ActionR
 
   try {
     const result = await providerApi.getStatus(provider, order.provider_order_id);
-    const { normalizeProviderStatus, isKnownOrderStatus, normalizeProviderCount } = await import(
+    const { normalizeProviderStatus, isKnownOrderStatus, mergeProviderCounts } = await import(
       "@/lib/provider/smmfollow"
     );
     const status = normalizeProviderStatus(result.status) as OrderStatus;
     if (!isKnownOrderStatus(status)) {
       return fail(`Provider returned an unrecognized status for this order: "${result.status}".`);
     }
+    const counts = mergeProviderCounts(result, {
+      start_count: order.start_count ?? null,
+      remain: order.remain ?? null,
+    });
     const updates = {
       status,
-      start_count: normalizeProviderCount(result.start_count),
-      remain: normalizeProviderCount(result.remain),
+      start_count: counts.start_count,
+      remain: counts.remain,
       provider_response: result as never,
     };
     const firstWrite = await updateOrderVerified(supabase, orderId, updates);
@@ -455,7 +461,7 @@ export async function refreshOrderStatusAction(orderId: string): Promise<ActionR
         );
       }
     }
-    return ok({ status });
+    return ok({ status, start_count: counts.start_count, remain: counts.remain });
   } catch (err) {
     return fail((err as Error).message);
   }
