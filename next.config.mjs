@@ -2,6 +2,10 @@
 const nextConfig = {
   allowedDevOrigins: [".monkeycode-ai.live"],
   experimental: {
+    staleTimes: {
+      dynamic: 30,
+      static: 300,
+    },
     serverActions: {
       bodySizeLimit: "5mb",
     },
