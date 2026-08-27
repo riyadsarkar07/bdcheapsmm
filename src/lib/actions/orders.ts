@@ -1,7 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
-import { createOrderSchema } from "@/lib/validations";
+import { createOrderSchema, retryOrderSchema } from "@/lib/validations";
 import { fail, ok, requireUser, isAdminProfile, type ActionResult } from "@/lib/guards";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { generateOrderNumber, formatUsd } from "@/lib/utils";
@@ -11,7 +11,7 @@ import { computeOrderCharge, round2 } from "@/lib/pricing";
 import { writeLog } from "@/lib/audit";
 import { createNotification } from "@/lib/notify";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database, Json, Order, OrderStatus } from "@/lib/types/database";
+import type { Database, Json, Order, OrderStatus, Profile } from "@/lib/types/database";
 
 /**
  * Update an order and VERIFY the row was actually changed. supabase-js returns
@@ -64,13 +64,50 @@ export async function createOrderAction(input: {
     return fail(parsed.error.errors[0]?.message ?? "Invalid order data");
   }
 
+  return placeOrder({
+    user,
+    serviceId: parsed.data.serviceId,
+    quantity: parsed.data.quantity,
+    link: parsed.data.link,
+    coupon: parsed.data.coupon,
+    ip,
+    userAgent: headerStore.get("user-agent"),
+  });
+}
+
+/**
+ * Shared order-creation path used by both the checkout form and the Retry
+ * Order action. The input is already validated and the user is authenticated.
+ * It loads the service, verifies active state/provider/qty/balance, inserts a
+ * pending order, charges the user atomically, submits it to the provider and
+ * persists the result. Retries deliberately reuse this path so a retried order
+ * is created exactly like a fresh one: a new order_number, a new provider order
+ * id, and the original (failed) order row is never modified.
+ */
+async function placeOrder({
+  user,
+  serviceId,
+  quantity,
+  link,
+  coupon,
+  ip,
+  userAgent,
+}: {
+  user: Profile;
+  serviceId: string;
+  quantity: number;
+  link: string;
+  coupon?: string;
+  ip?: string | null;
+  userAgent?: string | null;
+}): Promise<ActionResult<{ orderId: string; orderNumber: string }>> {
   const { createClient } = await import("@/lib/supabase/server");
   const supabase = await createClient();
 
   const { data: service, error: serviceError } = await supabase
     .from("services")
     .select("id, name, category_id, provider_id, provider_service_id, price, min_quantity, max_quantity, type, is_active")
-    .eq("id", parsed.data.serviceId)
+    .eq("id", serviceId)
     .maybeSingle();
 
   if (serviceError || !service) {
@@ -83,7 +120,7 @@ export async function createOrderAction(input: {
     return fail("This service has no provider attached.");
   }
 
-  const qty = parsed.data.quantity;
+  const qty = quantity;
   if (qty < service.min_quantity || qty > service.max_quantity) {
     return fail(
       `Quantity must be between ${service.min_quantity} and ${service.max_quantity} for this service.`
@@ -96,25 +133,25 @@ export async function createOrderAction(input: {
   let couponDiscount = 0;
 
   // Optional coupon
-  if (parsed.data.coupon && parsed.data.coupon.trim().length > 0) {
-    const { data: coupon, error: couponError } = await supabase.rpc("get_coupon", {
-      p_code: parsed.data.coupon.trim(),
+  if (coupon && coupon.trim().length > 0) {
+    const { data: couponRecord, error: couponError } = await supabase.rpc("get_coupon", {
+      p_code: coupon.trim(),
     });
-    if (couponError || !coupon) {
+    if (couponError || !couponRecord) {
       return fail("Invalid or expired coupon.");
     }
-    if (coupon.min_amount && price < coupon.min_amount) {
-      return fail(`Coupon requires a minimum order of ${coupon.min_amount} ${user.currency}.`);
+    if (couponRecord.min_amount && price < couponRecord.min_amount) {
+      return fail(`Coupon requires a minimum order of ${couponRecord.min_amount} ${user.currency}.`);
     }
-    const perUserUsed = await checkCouponUsage(user.id, coupon.id);
-    if (perUserUsed >= (coupon.per_user_limit ?? 1)) {
+    const perUserUsed = await checkCouponUsage(user.id, couponRecord.id);
+    if (perUserUsed >= (couponRecord.per_user_limit ?? 1)) {
       return fail("Coupon usage limit reached for your account.");
     }
-    if (coupon.discount_type === "percent") {
-      couponDiscount = round2((price * coupon.discount_value) / 100);
-      if (coupon.max_discount) couponDiscount = Math.min(couponDiscount, coupon.max_discount);
+    if (couponRecord.discount_type === "percent") {
+      couponDiscount = round2((price * couponRecord.discount_value) / 100);
+      if (couponRecord.max_discount) couponDiscount = Math.min(couponDiscount, couponRecord.max_discount);
     } else {
-      couponDiscount = Math.min(coupon.discount_value, price);
+      couponDiscount = Math.min(couponRecord.discount_value, price);
     }
     price = round2(Math.max(price - couponDiscount, 0));
   }
@@ -135,7 +172,7 @@ export async function createOrderAction(input: {
       user_id: user.id,
       service_id: service.id,
       provider_id: service.provider_id,
-      link: parsed.data.link,
+      link,
       quantity: qty,
       price,
       status: "pending",
@@ -169,20 +206,20 @@ export async function createOrderAction(input: {
   // 2b. Record coupon usage so usage limits are enforced. Best-effort: a
   // bookkeeping failure here must not abort the order after the charge has
   // been applied, which would leave the order stuck in "pending".
-  if (couponDiscount > 0 && parsed.data.coupon) {
+  if (couponDiscount > 0 && coupon) {
     try {
-      const { data: coupon } = await supabase
+      const { data: couponRecord } = await supabase
         .from("coupons")
         .select("id")
-        .eq("code", parsed.data.coupon.trim())
+        .eq("code", coupon.trim())
         .maybeSingle();
-      if (coupon) {
+      if (couponRecord) {
         await supabase.rpc("use_coupon", {
           p_user_id: user.id,
-          p_coupon_id: coupon.id,
+          p_coupon_id: couponRecord.id,
           p_balance_after: user.balance - price,
           p_currency: user.currency,
-          p_description: `Coupon discount applied (${parsed.data.coupon.trim()})`,
+          p_description: `Coupon discount applied (${coupon.trim()})`,
         });
       }
     } catch {
@@ -222,7 +259,7 @@ export async function createOrderAction(input: {
     } else {
       const result = await providerApi.createOrder(provider, {
         service: Number(service.provider_service_id),
-        link: parsed.data.link,
+        link,
         quantity: qty,
       });
       providerOrderId = String(result.order);
@@ -294,7 +331,7 @@ export async function createOrderAction(input: {
       ? `Created order #${orderNumber} for ${qty}x ${service.name} but provider submission failed: ${String((providerResponse as { error?: string })?.error ?? "Unknown error")}`
       : `Created order #${orderNumber} for ${qty}x ${service.name} and submitted to provider (provider order id ${providerOrderId})`,
     ip,
-    userAgent: headerStore.get("user-agent"),
+    userAgent,
     meta: {
       price,
       provider_order_id: providerOrderId,
@@ -510,17 +547,34 @@ export async function refillOrderAction(orderId: string): Promise<ActionResult> 
   return ok(undefined, "Refill requested successfully.");
 }
 
-export async function retryFailedOrderAction(orderId: string): Promise<ActionResult> {
+export async function retryOrderAction(
+  orderId: string,
+  link: string
+): Promise<ActionResult<{ orderId: string; orderNumber: string }>> {
+  const headerStore = await headers();
+  const ip = getClientIp(headerStore);
+
   const { user, error } = await requireUser();
   if (error || !user) return fail(error ?? "Not authenticated");
+  if (!user) return fail("Not authenticated");
+
+  const limited = await rateLimit(`order:${user.id}`, 20, 60);
+  if (!limited.success) {
+    return fail("You are creating orders too quickly. Please wait a moment.");
+  }
+
+  const parsed = retryOrderSchema.safeParse({ orderId, link });
+  if (!parsed.success) {
+    return fail(parsed.error.errors[0]?.message ?? "Invalid retry data");
+  }
 
   const { createClient } = await import("@/lib/supabase/server");
   const supabase = await createClient();
 
   const { data: order } = await supabase
     .from("orders")
-    .select("id, user_id, status, provider_id, service_id, order_number, link, quantity, services(provider_service_id)")
-    .eq("id", orderId)
+    .select("id, user_id, status, service_id, quantity, order_number")
+    .eq("id", parsed.data.orderId)
     .single();
 
   if (!order) return fail("Order not found.");
@@ -528,45 +582,29 @@ export async function retryFailedOrderAction(orderId: string): Promise<ActionRes
   if (order.status !== "failed" && order.status !== "rejected") {
     return fail("Only failed orders can be retried.");
   }
-  if (!order.provider_id) return fail("Provider not found.");
+  if (!order.service_id) return fail("Original order has no service.");
 
-  const { data: provider } = await createAdminClient()
-    .from("providers")
-    .select("id, name, api_url, api_key")
-    .eq("id", order.provider_id)
-    .single();
-  if (!provider) return fail("Provider not found.");
+  // Create a brand-new order through the shared creation path (same service and
+  // quantity, new link). The original failed order row is left untouched.
+  const result = await placeOrder({
+    user,
+    serviceId: order.service_id,
+    quantity: order.quantity,
+    link: parsed.data.link,
+    ip,
+    userAgent: headerStore.get("user-agent"),
+  });
 
-  try {
-    const result = await providerApi.createOrder(provider, {
-      service: Number(order.services?.provider_service_id),
-      link: order.link,
-      quantity: order.quantity,
-    });
-    const updates = {
-      status: "processing" as OrderStatus,
-      provider_order_id: String(result.order),
-      provider_response: result as never,
-      error_message: null,
-    };
-    const firstWrite = await updateOrderVerified(supabase, orderId, updates);
-    if (!firstWrite.ok) {
-      const retryWrite = await updateOrderVerified(createAdminClient(), orderId, updates);
-      if (!retryWrite.ok) {
-        throw new Error(
-          `Provider accepted the order but saving the reference failed: ${retryWrite.error?.message ?? "unknown error"}`
-        );
-      }
-    }
+  if (result.success && result.data) {
     await writeLog({
       userId: user.id,
       action: "order_retry",
       entityType: "orders",
       entityId: order.id,
-      description: `Retried order #${order.order_number ?? order.id}`,
+      description: `Retried failed order #${order.order_number ?? order.id} by creating a new order #${result.data.orderNumber} with a new link`,
+      meta: { original_order_id: order.id, new_order_id: result.data.orderId },
     });
-    return ok(undefined, "Order retried successfully.");
-  } catch (err) {
-    return fail((err as Error).message);
   }
+
+  return result;
 }

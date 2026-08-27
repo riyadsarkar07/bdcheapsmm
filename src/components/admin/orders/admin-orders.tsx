@@ -17,6 +17,15 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { OrderStatusBadge } from "@/components/status-badges";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   adminUpdateOrderStatusAction,
   adminRefundOrderAction,
@@ -26,7 +35,7 @@ import {
   cancelOrderAction,
   refreshOrderStatusAction,
   refillOrderAction,
-  retryFailedOrderAction,
+  retryOrderAction,
 } from "@/lib/actions/orders";
 import { formatUsd, formatDateTime, truncate } from "@/lib/utils";
 import type { OrderStatus } from "@/lib/types/database";
@@ -64,6 +73,8 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
   const [statusFilter, setStatusFilter] = React.useState<string>("all");
   const [actionLoading, setActionLoading] = React.useState<string | null>(null);
   const [retrying, setRetrying] = React.useState(false);
+  const [retryTarget, setRetryTarget] = React.useState<OrderRow | null>(null);
+  const [retryLink, setRetryLink] = React.useState("");
 
   const filtered = orders.filter((order) => {
     const matchesSearch =
@@ -131,6 +142,25 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
       }
     } finally {
       setRetrying(false);
+    }
+  }
+
+  async function submitRetry(e: React.FormEvent) {
+    e.preventDefault();
+    if (!retryTarget || actionLoading === retryTarget.id + "Retry") return;
+    setActionLoading(retryTarget.id + "Retry");
+    try {
+      const result = await retryOrderAction(retryTarget.id, retryLink);
+      if (result.success) {
+        toast.success(`Order #${retryTarget.order_number}: new order created`);
+        setRetryTarget(null);
+        setRetryLink("");
+        router.refresh();
+      } else {
+        toast.error(result.error ?? "Retry failed");
+      }
+    } finally {
+      setActionLoading(null);
     }
   }
 
@@ -257,13 +287,14 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                               variant="ghost"
                               size="iconSm"
                               className="text-primary hover:text-primary"
-                              onClick={() =>
-                                runOrderAction(order, "Retry", () => retryFailedOrderAction(order.id))
-                              }
+                              onClick={() => {
+                                setRetryLink("");
+                                setRetryTarget(order);
+                              }}
                               disabled={actionLoading === order.id + "Retry"}
-                              title="Retry order"
+                              title="Retry order with a new link"
                             >
-                              {actionLoading === order.id + "Retry" ? <Loader2 className="animate-spin" /> : <Zap />}
+                              <Zap />
                             </Button>
                           ) : null}
                           {canCancel(order.status) ? (
@@ -302,6 +333,52 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={retryTarget !== null} onOpenChange={(open) => !open && setRetryTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Retry Order</DialogTitle>
+            <DialogDescription>
+              Create a new order with the same service and quantity. Enter the new
+              target link to use.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitRetry} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="admin-retry-link">New Target Link</Label>
+              <Input
+                id="admin-retry-link"
+                type="url"
+                value={retryLink}
+                onChange={(e) => setRetryLink(e.target.value)}
+                placeholder="https://..."
+                required
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setRetryTarget(null)}
+                disabled={retryTarget !== null && actionLoading === retryTarget.id + "Retry"}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={retryTarget !== null && actionLoading === retryTarget.id + "Retry"}
+              >
+                {retryTarget !== null && actionLoading === retryTarget.id + "Retry" ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Zap />
+                )}
+                Create New Order
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -21,13 +21,23 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { OrderStatusBadge } from "@/components/status-badges";
 import { CopyButton } from "@/components/copy-button";
 import {
   cancelOrderAction,
   refreshOrderStatusAction,
   refillOrderAction,
-  retryFailedOrderAction,
+  retryOrderAction,
 } from "@/lib/actions/orders";
 import { formatUsd, formatDateTime } from "@/lib/utils";
 import type { Order } from "@/lib/types/database";
@@ -49,6 +59,27 @@ export function OrderDetailClient({
   const router = useRouter();
   const [orderState, setOrderState] = React.useState(order);
   const [action, setAction] = React.useState<string | null>(null);
+  const [retryOpen, setRetryOpen] = React.useState(false);
+  const [retryLink, setRetryLink] = React.useState(order.link);
+
+  async function handleRetry(e: React.FormEvent) {
+    e.preventDefault();
+    if (action !== null) return;
+    setAction("retry");
+    try {
+      const result = await retryOrderAction(orderState.id, retryLink);
+      if (result.success && result.data) {
+        toast.success("New order created — retry submitted");
+        setRetryOpen(false);
+        router.refresh();
+        router.push(`/orders/${result.data.orderId}`);
+      } else {
+        toast.error(result.error ?? "Retry failed");
+      }
+    } finally {
+      setAction(null);
+    }
+  }
 
   async function runAction(
     name: string,
@@ -204,10 +235,10 @@ export function OrderDetailClient({
             <Button
               variant="success"
               className="w-full justify-start"
-              onClick={() => runAction("retry", () => retryFailedOrderAction(orderState.id))}
+              onClick={() => setRetryOpen(true)}
               disabled={action !== null || !canRetry}
             >
-              {action === "retry" ? <Loader2 className="animate-spin" /> : <Zap />}
+              <Zap />
               Retry Order
             </Button>
 
@@ -226,6 +257,45 @@ export function OrderDetailClient({
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={retryOpen} onOpenChange={setRetryOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Retry Order</DialogTitle>
+            <DialogDescription>
+              Create a new order with the same service and quantity. Enter the new
+              target link to use.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleRetry} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="retry-link">New Target Link</Label>
+              <Input
+                id="retry-link"
+                type="url"
+                value={retryLink}
+                onChange={(e) => setRetryLink(e.target.value)}
+                placeholder="https://..."
+                required
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setRetryOpen(false)}
+                disabled={action === "retry"}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="success" disabled={action === "retry"}>
+                {action === "retry" ? <Loader2 className="animate-spin" /> : <Zap />}
+                Create New Order
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {isAdmin && orderState.provider_response ? (
         <Card>

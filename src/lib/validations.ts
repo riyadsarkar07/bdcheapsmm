@@ -77,6 +77,18 @@ export const createOrderSchema = z.object({
   coupon: z.string().max(50).optional().or(z.literal("")),
 });
 
+export const retryOrderSchema = z.object({
+  orderId: z.string().uuid("Invalid order"),
+  link: z
+    .string()
+    .min(5, "Link is required")
+    .max(2048, "Link is too long")
+    .refine(
+      (value) => /^https?:\/\/.+/i.test(value),
+      "Please enter a valid URL starting with http:// or https://"
+    ),
+});
+
 export const addFundsSchema = z.object({
   method: z.enum(["bKash", "nagad", "rocket"], {
     message: "Select a payment method",
