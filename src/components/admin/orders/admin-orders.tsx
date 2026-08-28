@@ -337,46 +337,77 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
       <Dialog open={retryTarget !== null} onOpenChange={(open) => !open && setRetryTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Retry Order</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-primary" />
+              Retry Order
+            </DialogTitle>
             <DialogDescription>
-              Create a new order with the same service and quantity. Enter the new
-              target link to use.
+              Create a brand-new order with the same service and quantity, but a
+              different target link. The original failed order is left unchanged.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={submitRetry} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="admin-retry-link">New Target Link</Label>
-              <Input
-                id="admin-retry-link"
-                type="url"
-                value={retryLink}
-                onChange={(e) => setRetryLink(e.target.value)}
-                placeholder="https://..."
-                required
-              />
-            </div>
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setRetryTarget(null)}
-                disabled={retryTarget !== null && actionLoading === retryTarget.id + "Retry"}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={retryTarget !== null && actionLoading === retryTarget.id + "Retry"}
-              >
-                {retryTarget !== null && actionLoading === retryTarget.id + "Retry" ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <Zap />
-                )}
-                Create New Order
-              </Button>
-            </DialogFooter>
-          </form>
+          {retryTarget ? (
+            <form onSubmit={submitRetry} className="space-y-4">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="rounded-lg bg-muted/50 p-3">
+                  <p className="text-xs text-muted-foreground">Order Number</p>
+                  <p className="font-medium">#{retryTarget.order_number}</p>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-3">
+                  <p className="text-xs text-muted-foreground">Quantity</p>
+                  <p className="font-medium">{retryTarget.quantity.toLocaleString()}</p>
+                </div>
+                <div className="col-span-2 rounded-lg bg-muted/50 p-3">
+                  <p className="text-xs text-muted-foreground">Service</p>
+                  <p className="line-clamp-1 font-medium">{retryTarget.services?.name ?? "—"}</p>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-3">
+                  <p className="text-xs text-muted-foreground">User</p>
+                  <p className="line-clamp-1 font-medium">
+                    {retryTarget.profiles?.full_name ?? retryTarget.profiles?.email ?? "—"}
+                  </p>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-3">
+                  <p className="text-xs text-muted-foreground">Amount</p>
+                  <p className="font-medium">{formatUsd(retryTarget.price)}</p>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="admin-retry-link">New Target Link</Label>
+                <Input
+                  id="admin-retry-link"
+                  type="url"
+                  value={retryLink}
+                  onChange={(e) => setRetryLink(e.target.value)}
+                  placeholder="https://..."
+                  autoFocus
+                  required
+                />
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setRetryTarget(null)}
+                  disabled={actionLoading === retryTarget.id + "Retry"}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={actionLoading === retryTarget.id + "Retry"}
+                >
+                  {actionLoading === retryTarget.id + "Retry" ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <Zap />
+                  )}
+                  Create New Order
+                </Button>
+              </DialogFooter>
+            </form>
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>
