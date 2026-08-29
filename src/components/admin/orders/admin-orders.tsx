@@ -39,6 +39,7 @@ import {
 } from "@/lib/actions/orders";
 import { formatUsd, formatDateTime, truncate } from "@/lib/utils";
 import type { OrderStatus } from "@/lib/types/database";
+import type { OrderProfit } from "@/lib/order-profit";
 
 type OrderRow = {
   id: string;
@@ -53,6 +54,7 @@ type OrderRow = {
   status: OrderStatus;
   created_at: string;
   currency: string;
+  profit: OrderProfit;
 };
 
 const statusOptions: OrderStatus[] = [
@@ -214,6 +216,9 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Service</th>
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Qty</th>
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Amount</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Cost</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Profit</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Profit %</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
@@ -238,6 +243,29 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                       </td>
                       <td className="px-4 py-3 text-right">{order.quantity.toLocaleString()}</td>
                       <td className="px-4 py-3 text-right font-medium">{formatUsd(order.price)}</td>
+                      <td className="px-4 py-3 text-right">
+                        {order.profit.providerCost == null ? (
+                          <span className="text-muted-foreground">N/A</span>
+                        ) : (
+                          formatUsd(order.profit.providerCost)
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right font-medium">
+                        {order.profit.profit == null ? (
+                          <span className="text-muted-foreground">N/A</span>
+                        ) : (
+                          <span className={order.profit.profit < 0 ? "text-destructive" : order.profit.profit > 0 ? "text-success" : undefined}>
+                            {formatUsd(order.profit.profit)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {order.profit.profitPercent == null ? (
+                          <span className="text-muted-foreground">N/A</span>
+                        ) : (
+                          `${order.profit.profitPercent}%`
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <OrderStatusBadge status={order.status} />
                       </td>

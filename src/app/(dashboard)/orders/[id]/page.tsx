@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser, isAdminProfile } from "@/lib/guards";
+import { computeOrderProfit } from "@/lib/order-profit";
 import { OrderDetailClient } from "@/components/orders/order-detail-client";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -17,15 +18,20 @@ export default async function OrderDetailPage({
   const { user, error } = await requireUser();
   if (error || !user) return null;
 
+  const isAdmin = isAdminProfile(user);
   const supabase = await createClient();
   const { data: order } = await supabase
     .from("orders")
-    .select("*, services(id, name, slug, type), profiles(full_name, email)")
+    .select(
+      isAdmin
+        ? "*, services(id, name, slug, type, provider_price), profiles(full_name, email)"
+        : "*, services(id, name, slug, type), profiles(full_name, email)"
+    )
     .eq("id", id)
     .maybeSingle();
 
   if (!order) notFound();
-  if (order.user_id !== user.id && !isAdminProfile(user)) notFound();
+  if (order.user_id !== user.id && !isAdmin) notFound();
 
   const { data: provider } = order.provider_id
     ? await supabase
@@ -34,6 +40,10 @@ export default async function OrderDetailPage({
         .eq("id", order.provider_id)
         .maybeSingle()
     : { data: null };
+
+  const profit = isAdmin
+    ? computeOrderProfit(order, order.services as { provider_price?: number | null } | null)
+    : undefined;
 
   return (
     <div>
@@ -44,8 +54,9 @@ export default async function OrderDetailPage({
       </Button>
       <OrderDetailClient
         order={order}
-        providerName={isAdminProfile(user) ? provider?.name ?? null : null}
-        isAdmin={isAdminProfile(user)}
+        providerName={isAdmin ? provider?.name ?? null : null}
+        isAdmin={isAdmin}
+        profit={profit}
       />
     </div>
   );

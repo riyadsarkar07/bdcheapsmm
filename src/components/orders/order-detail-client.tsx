@@ -16,6 +16,8 @@ import {
   Layers,
   Hash,
   Clock,
+  FileDown,
+  TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,21 +42,32 @@ import {
   retryOrderAction,
 } from "@/lib/actions/orders";
 import { formatUsd, formatDateTime } from "@/lib/utils";
-import type { Order } from "@/lib/types/database";
-import type { OrderStatus } from "@/lib/types/database";
+import type { Order, OrderStatus } from "@/lib/types/database";
+import type { OrderProfit } from "@/lib/order-profit";
 
 interface OrderWithRelations extends Order {
   services?: { id: string; name: string; slug: string; type: string | null } | null;
+}
+
+function ProfitValue({ value }: { value: number | null }) {
+  if (value == null) return <span className="text-muted-foreground">N/A</span>;
+  return (
+    <span className={value < 0 ? "text-destructive" : value > 0 ? "text-success" : "text-foreground"}>
+      {formatUsd(value)}
+    </span>
+  );
 }
 
 export function OrderDetailClient({
   order,
   providerName,
   isAdmin = false,
+  profit,
 }: {
   order: OrderWithRelations;
   providerName: string | null;
   isAdmin?: boolean;
+  profit?: OrderProfit;
 }) {
   const router = useRouter();
   const [orderState, setOrderState] = React.useState(order);
@@ -205,6 +218,12 @@ export function OrderDetailClient({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2.5">
+            <Button asChild variant="gradient" className="w-full justify-start">
+              <a href={`/api/orders/${orderState.id}/invoice`} download={`invoice-${orderState.order_number}.pdf`}>
+                <FileDown />
+                Download Invoice
+              </a>
+            </Button>
             <Button
               variant="outline"
               className="w-full justify-start"
@@ -257,6 +276,46 @@ export function OrderDetailClient({
           </CardContent>
         </Card>
       </div>
+
+      {isAdmin && profit ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" /> Profit
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                <dt className="text-xs text-muted-foreground">Customer Price</dt>
+                <dd className="text-right text-sm font-medium">{formatUsd(profit.customerPrice)}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                <dt className="text-xs text-muted-foreground">Provider Cost</dt>
+                <dd className="text-right text-sm font-medium">
+                  {profit.providerCost == null ? <span className="text-muted-foreground">N/A</span> : formatUsd(profit.providerCost)}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                <dt className="text-xs text-muted-foreground">Profit</dt>
+                <dd className="text-right text-sm font-medium">
+                  <ProfitValue value={profit.profit} />
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                <dt className="text-xs text-muted-foreground">Profit %</dt>
+                <dd className="text-right text-sm font-medium">
+                  {profit.profitPercent == null ? (
+                    <span className="text-muted-foreground">N/A</span>
+                  ) : (
+                    `${profit.profitPercent}%`
+                  )}
+                </dd>
+              </div>
+            </dl>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Dialog open={retryOpen} onOpenChange={setRetryOpen}>
         <DialogContent>
@@ -326,6 +385,7 @@ export function OrderDetailClient({
           </form>
         </DialogContent>
       </Dialog>
+
 
       {isAdmin && orderState.provider_response ? (
         <Card>
