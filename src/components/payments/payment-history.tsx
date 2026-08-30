@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { PaymentStatusBadge } from "@/components/status-badges";
 import { EmptyState } from "@/components/empty-state";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
-import { History } from "lucide-react";
+import { FileDown, History } from "lucide-react";
 import type { PaymentRequest, PaymentStatus } from "@/lib/types/database";
 
 export function PaymentHistory({ requests }: { requests: PaymentRequest[] }) {
@@ -24,7 +26,7 @@ export function PaymentHistory({ requests }: { requests: PaymentRequest[] }) {
             {requests.map((request) => (
               <div
                 key={request.id}
-                className="flex items-center justify-between rounded-lg border p-3"
+                className="flex items-center justify-between gap-3 rounded-lg border p-3"
               >
                 <div className="min-w-0">
                   <p className="font-semibold">
@@ -42,7 +44,20 @@ export function PaymentHistory({ requests }: { requests: PaymentRequest[] }) {
                     </p>
                   ) : null}
                 </div>
-                <PaymentStatusBadge status={request.status as PaymentStatus} />
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <PaymentStatusBadge status={request.status as PaymentStatus} />
+                  {request.status === "approved" ? (
+                    <Button asChild variant="outline" size="sm" className="h-7 px-2 text-xs">
+                      <Link
+                        href={`/api/payments/${request.id}/invoice`}
+                        download={`invoice-${request.id}.pdf`}
+                      >
+                        <FileDown className="h-3.5 w-3.5" />
+                        Invoice
+                      </Link>
+                    </Button>
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>

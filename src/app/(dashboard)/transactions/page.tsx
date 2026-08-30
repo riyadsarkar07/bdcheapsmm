@@ -2,9 +2,11 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/guards";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TransactionTypeBadge } from "@/components/status-badges";
 import { formatCurrency, formatUsd, formatDateTime } from "@/lib/utils";
+import { FileDown } from "lucide-react";
 import type { TransactionType } from "@/lib/types/database";
 
 export const revalidate = 0;
@@ -14,12 +16,21 @@ export default async function TransactionsPage() {
   if (error || !user) return null;
 
   const supabase = await createClient();
-  const { data: transactions } = await supabase
-    .from("transactions")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(200);
+  const [{ data: transactions }, { data: approvedDeposits }] = await Promise.all([
+    supabase
+      .from("transactions")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("payment_requests")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("status", "approved"),
+  ]);
+
+  const approvedDepositIds = new Set((approvedDeposits ?? []).map((p) => p.id));
 
   const deposits = (transactions ?? []).filter((t) => t.type === "deposit").reduce((s, t) => s + Number(t.amount), 0);
   const spent = (transactions ?? []).filter((t) => t.type === "order_deduction").reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
@@ -69,6 +80,7 @@ export default async function TransactionsPage() {
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Amount</th>
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Balance</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Invoice</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -90,6 +102,28 @@ export default async function TransactionsPage() {
                         {tx.balance_after != null ? formatCurrency(tx.balance_after, tx.currency) : "—"}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{formatDateTime(tx.created_at)}</td>
+                      <td className="px-4 py-3 text-right">
+                        {tx.type === "deposit" &&
+                        tx.reference_type === "payment_requests" &&
+                        tx.reference_id &&
+                        approvedDepositIds.has(tx.reference_id) ? (
+                          <Button
+                            asChild
+                            variant="ghost"
+                            size="iconSm"
+                            title="Download deposit invoice"
+                          >
+                            <a
+                              href={`/api/payments/${tx.reference_id}/invoice`}
+                              download={`invoice-${tx.reference_id}.pdf`}
+                            >
+                              <FileDown className="h-3.5 w-3.5" />
+                            </a>
+                          </Button>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

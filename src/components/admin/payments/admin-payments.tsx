@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Search, Loader2, CheckCircle2, XCircle, Eye } from "lucide-react";
+import { Search, Loader2, CheckCircle2, XCircle, Eye, FileDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -171,6 +171,16 @@ export function AdminPayments({ payments }: { payments: PaymentRow[] }) {
                           <Button variant="ghost" size="iconSm" onClick={() => setViewing(payment)} aria-label="View payment">
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
+                          {payment.status === "approved" ? (
+                            <Button asChild variant="ghost" size="iconSm" className="text-primary hover:text-primary" aria-label="Download invoice">
+                              <a
+                                href={`/api/payments/${payment.id}/invoice`}
+                                download={`invoice-${payment.id}.pdf`}
+                              >
+                                <FileDown className="h-3.5 w-3.5" />
+                              </a>
+                            </Button>
+                          ) : null}
                           {payment.status === "pending" ? (
                             <>
                               <Button
@@ -248,6 +258,19 @@ export function AdminPayments({ payments }: { payments: PaymentRow[] }) {
                   No screenshot uploaded.
                 </p>
               )}
+              {viewing.status === "approved" ? (
+                <div className="flex justify-end pt-1">
+                  <Button asChild variant="outline" size="sm">
+                    <a
+                      href={`/api/payments/${viewing.id}/invoice`}
+                      download={`invoice-${viewing.id}.pdf`}
+                    >
+                      <FileDown className="h-3.5 w-3.5" />
+                      Download Invoice
+                    </a>
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </DialogContent>

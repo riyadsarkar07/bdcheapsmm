@@ -1,5 +1,5 @@
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb, type RGB } from "pdf-lib";
-import type { Order, OrderStatus } from "@/lib/types/database";
+import type { Order, OrderStatus, PaymentStatus } from "@/lib/types/database";
 
 const PAGE_WIDTH = 595.28; // A4 portrait
 const PAGE_HEIGHT = 841.89;
@@ -13,20 +13,35 @@ const TEXT_MUTED: RGB = rgb(0x6b / 255, 0x72 / 255, 0x80 / 255);
 const BORDER: RGB = rgb(0xe5 / 255, 0xe7 / 255, 0xeb / 255);
 const LIGHT_BG: RGB = rgb(0xf9 / 255, 0xfa / 255, 0xfb / 255);
 
-function formatUsd(amount: number | null | undefined): string {
+export function formatUsd(amount: number | null | undefined): string {
   const value = Number(amount ?? 0);
   if (Number.isNaN(value)) return "$0.00";
   return "$" + value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function statusLabel(status: OrderStatus | string): string {
+export function formatCurrency(
+  amount: number | null | undefined,
+  currency = "BDT"
+): string {
+  const value = Number(amount ?? 0);
+  if (Number.isNaN(value)) return "0.00";
+  const code = (currency ?? "BDT").toUpperCase();
+  const formatted = value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  if (code === "USD") return "$" + formatted;
+  return code + " " + formatted;
+}
+
+function statusLabel(status: OrderStatus | PaymentStatus | string): string {
   return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function formatDateTime(iso: string | null | undefined, timezone: string | null): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   try {
     return d.toLocaleString("en-US", {
       timeZone: timezone ?? undefined,
@@ -96,32 +111,30 @@ function drawWrapped(
   return y;
 }
 
-interface InvoiceInput {
-  order: Pick<
-    Order,
-    "order_number" | "link" | "quantity" | "price" | "status" | "provider_order_id" | "created_at"
-  >;
-  serviceName: string | null;
-  profile: { full_name: string | null; email: string | null };
-  panel: { name: string; tagline: string | null; logo: string | null };
-  timezone?: string | null;
+export interface PanelInfo {
+  name: string;
+  tagline: string | null;
+  logo: string | null;
+}
+
+export interface BillTo {
+  full_name: string | null;
+  email: string | null;
 }
 
 /**
- * Build a single-page A4 PDF invoice for an order. Pure server-side generation
- * with pdf-lib; never reads or mutates order data.
+ * Shared invoice header: logo + panel name/tagline on the left, "INVOICE" title
+ * with the invoice number on the right, accent divider below. Returns the Y
+ * position the body content should start from.
  */
-export async function generateOrderInvoicePdf(input: InvoiceInput): Promise<Uint8Array> {
-  const doc = await PDFDocument.create();
-  const page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  const font = await doc.embedStandardFont(StandardFonts.Helvetica);
-  const bold = await doc.embedStandardFont(StandardFonts.HelveticaBold);
-
-  const logo = await loadLogo(doc, input.panel.logo);
-
-  // ------------------------------------------------------------
-  // Header
-  // ------------------------------------------------------------
+function drawInvoiceHeader(
+  page: PDFPage,
+  font: PDFFont,
+  bold: PDFFont,
+  logo: PDFImage | null,
+  panel: PanelInfo,
+  invoiceNumber: string
+): number {
   let headerY = PAGE_HEIGHT - MARGIN;
 
   if (logo) {
@@ -134,16 +147,16 @@ export async function generateOrderInvoicePdf(input: InvoiceInput): Promise<Uint
 
   const brandX = logo ? MARGIN + 70 : MARGIN;
   const brandNameY = logo ? headerY - 4 : headerY - 22;
-  page.drawText(input.panel.name || "SMM Panel", { x: brandX, y: brandNameY, size: 20, font: bold, color: TEXT_DARK });
-  if (input.panel.tagline) {
-    page.drawText(input.panel.tagline, { x: brandX, y: brandNameY - 16, size: 9, font, color: TEXT_MUTED });
+  page.drawText(panel.name || "SMM Panel", { x: brandX, y: brandNameY, size: 20, font: bold, color: TEXT_DARK });
+  if (panel.tagline) {
+    page.drawText(panel.tagline, { x: brandX, y: brandNameY - 16, size: 9, font, color: TEXT_MUTED });
   }
 
   const titleWidth = 96;
   page.drawText("INVOICE", { x: PAGE_WIDTH - MARGIN - titleWidth, y: headerY - 26, size: 26, font: bold, color: ACCENT });
-  const invoiceNum = `Invoice #${input.order.order_number}`;
-  page.drawText(invoiceNum, {
-    x: PAGE_WIDTH - MARGIN - font.widthOfTextAtSize(invoiceNum, 10),
+  const invoiceLine = `Invoice #${invoiceNumber}`;
+  page.drawText(invoiceLine, {
+    x: PAGE_WIDTH - MARGIN - font.widthOfTextAtSize(invoiceLine, 10),
     y: headerY - 40,
     size: 10,
     font,
@@ -159,15 +172,34 @@ export async function generateOrderInvoicePdf(input: InvoiceInput): Promise<Uint
     color: ACCENT,
   });
 
-  // ------------------------------------------------------------
-  // Bill To + order metadata
-  // ------------------------------------------------------------
-  const metaTop = headerY - 92;
+  return headerY;
+}
+
+function drawInvoiceFooter(
+  page: PDFPage,
+  font: PDFFont,
+  bold: PDFFont,
+  panelName: string,
+  timezone: string | null
+): void {
+  page.drawLine({ start: { x: MARGIN, y: 96 }, end: { x: PAGE_WIDTH - MARGIN, y: 96 }, thickness: 1, color: BORDER });
+  page.drawText("Thank you for your business!", { x: MARGIN, y: 74, size: 10, font: bold, color: TEXT_DARK });
+  const generated = `Generated on ${formatDateTime(new Date().toISOString(), timezone)} by ${panelName || "SMM Panel"}`;
+  page.drawText(generated, { x: MARGIN, y: 56, size: 8, font, color: TEXT_MUTED });
+}
+
+function drawBillTo(
+  page: PDFPage,
+  font: PDFFont,
+  bold: PDFFont,
+  metaTop: number,
+  profile: BillTo
+): number {
   page.drawText("BILLED TO", { x: MARGIN, y: metaTop, size: 8, font: bold, color: TEXT_MUTED });
   const billToLines: string[] = [];
-  if (input.profile.full_name) billToLines.push(input.profile.full_name);
-  if (input.profile.email) billToLines.push(input.profile.email);
-  if (billToLines.length === 0) billToLines.push("—");
+  if (profile.full_name) billToLines.push(profile.full_name);
+  if (profile.email) billToLines.push(profile.email);
+  if (billToLines.length === 0) billToLines.push("-");
   let billY = metaTop - 16;
   billToLines.forEach((line, i) => {
     page.drawText(line, {
@@ -179,15 +211,19 @@ export async function generateOrderInvoicePdf(input: InvoiceInput): Promise<Uint
     });
     billY -= 16;
   });
+  return billY;
+}
 
-  const metaRows: { label: string; value: string }[] = [
-    { label: "Order Date", value: formatDateTime(input.order.created_at, input.timezone ?? null) },
-    { label: "Status", value: statusLabel(input.order.status) },
-    { label: "Provider Order ID", value: input.order.provider_order_id ?? "N/A" },
-  ];
-  let metaX = PAGE_WIDTH - MARGIN - 170;
+function drawMetaRows(
+  page: PDFPage,
+  font: PDFFont,
+  bold: PDFFont,
+  metaTop: number,
+  rows: { label: string; value: string }[]
+): void {
+  const metaX = PAGE_WIDTH - MARGIN - 170;
   let metaY = metaTop;
-  for (const row of metaRows) {
+  for (const row of rows) {
     page.drawText(row.label, { x: metaX, y: metaY, size: 9, font, color: TEXT_MUTED });
     page.drawText(row.value, {
       x: PAGE_WIDTH - MARGIN - font.widthOfTextAtSize(row.value, 9),
@@ -198,10 +234,46 @@ export async function generateOrderInvoicePdf(input: InvoiceInput): Promise<Uint
     });
     metaY -= 16;
   }
+}
 
-  // ------------------------------------------------------------
+// ============================================================
+// Order invoice
+// ============================================================
+
+interface OrderInvoiceInput {
+  order: Pick<
+    Order,
+    "order_number" | "link" | "quantity" | "price" | "status" | "provider_order_id" | "created_at"
+  >;
+  serviceName: string | null;
+  profile: BillTo;
+  panel: PanelInfo;
+  timezone?: string | null;
+}
+
+/**
+ * Build a single-page A4 PDF invoice for an order. Pure server-side generation
+ * with pdf-lib; never reads or mutates order data.
+ */
+export async function generateOrderInvoicePdf(input: OrderInvoiceInput): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+  const font = await doc.embedStandardFont(StandardFonts.Helvetica);
+  const bold = await doc.embedStandardFont(StandardFonts.HelveticaBold);
+
+  const logo = await loadLogo(doc, input.panel.logo);
+  const headerY = drawInvoiceHeader(page, font, bold, logo, input.panel, input.order.order_number);
+
+  // Bill To + order metadata
+  const metaTop = headerY - 92;
+  const billY = drawBillTo(page, font, bold, metaTop, input.profile);
+  drawMetaRows(page, font, bold, metaTop, [
+    { label: "Order Date", value: formatDateTime(input.order.created_at, input.timezone ?? null) },
+    { label: "Status", value: statusLabel(input.order.status) },
+    { label: "Provider Order ID", value: input.order.provider_order_id ?? "N/A" },
+  ]);
+
   // Order details table
-  // ------------------------------------------------------------
   const tableTop = Math.max(metaTop, billY) - 40;
   const colQtyX = PAGE_WIDTH - MARGIN - 150; // Quantity column right edge offset
   const colAmountX = PAGE_WIDTH - MARGIN - 75; // Amount column right edge offset
@@ -217,7 +289,7 @@ export async function generateOrderInvoicePdf(input: InvoiceInput): Promise<Uint
 
   // Row content (service name + wrapped target URL)
   const descWidth = colQtyX - MARGIN - 24;
-  page.drawText(input.serviceName || "—", { x: MARGIN + 12, y: tableTop - 40, size: 10, font: bold, color: TEXT_DARK });
+  page.drawText(input.serviceName || "-", { x: MARGIN + 12, y: tableTop - 40, size: 10, font: bold, color: TEXT_DARK });
   const linkBottom = drawWrapped(
     page,
     input.order.link,
@@ -243,13 +315,95 @@ export async function generateOrderInvoicePdf(input: InvoiceInput): Promise<Uint
   const totalValue = formatUsd(input.order.price);
   page.drawText(totalValue, { x: colAmountX - font.widthOfTextAtSize(totalValue, 12), y: tableBottom - 21, size: 12, font: bold, color: ACCENT });
 
-  // ------------------------------------------------------------
-  // Footer
-  // ------------------------------------------------------------
-  page.drawLine({ start: { x: MARGIN, y: 96 }, end: { x: PAGE_WIDTH - MARGIN, y: 96 }, thickness: 1, color: BORDER });
-  page.drawText("Thank you for your business!", { x: MARGIN, y: 74, size: 10, font: bold, color: TEXT_DARK });
-  const generated = `Generated on ${formatDateTime(new Date().toISOString(), input.timezone ?? null)} by ${input.panel.name || "SMM Panel"}`;
-  page.drawText(generated, { x: MARGIN, y: 56, size: 8, font, color: TEXT_MUTED });
+  drawInvoiceFooter(page, font, bold, input.panel.name, input.timezone ?? null);
+
+  return doc.save();
+}
+
+// ============================================================
+// Deposit (Add Funds) invoice
+// ============================================================
+
+export interface DepositInvoiceInput {
+  invoiceNumber: string;
+  payment: {
+    method: string;
+    transaction_id: string;
+    amount: number;
+    currency: string;
+    status: PaymentStatus | string;
+    created_at: string;
+    processed_at: string | null;
+  };
+  profile: BillTo;
+  panel: PanelInfo;
+  timezone?: string | null;
+}
+
+/**
+ * Build a single-page A4 PDF invoice for an approved Add Funds deposit, using
+ * the same layout as the order invoice. Pure read-only generation from the
+ * existing payment_requests row; never mutates payment or balance data.
+ */
+export async function generateDepositInvoicePdf(input: DepositInvoiceInput): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+  const font = await doc.embedStandardFont(StandardFonts.Helvetica);
+  const bold = await doc.embedStandardFont(StandardFonts.HelveticaBold);
+
+  const logo = await loadLogo(doc, input.panel.logo);
+  const headerY = drawInvoiceHeader(page, font, bold, logo, input.panel, input.invoiceNumber);
+
+  // Bill To + payment metadata
+  const metaTop = headerY - 92;
+  const billY = drawBillTo(page, font, bold, metaTop, input.profile);
+  const metaRows: { label: string; value: string }[] = [
+    { label: "Date & Time", value: formatDateTime(input.payment.created_at, input.timezone ?? null) },
+    { label: "Payment Status", value: statusLabel(input.payment.status) },
+  ];
+  if (input.payment.processed_at) {
+    metaRows.push({ label: "Approved", value: formatDateTime(input.payment.processed_at, input.timezone ?? null) });
+  }
+  drawMetaRows(page, font, bold, metaTop, metaRows);
+
+  // Deposit details table (single amount column)
+  const tableTop = Math.max(metaTop, billY) - 40;
+  const colAmountX = PAGE_WIDTH - MARGIN - 75; // Amount column right edge offset
+  const headerBgHeight = 22;
+
+  page.drawRectangle({ x: MARGIN, y: tableTop - headerBgHeight, width: CONTENT_WIDTH, height: headerBgHeight, color: LIGHT_BG });
+  page.drawLine({ start: { x: MARGIN, y: tableTop }, end: { x: PAGE_WIDTH - MARGIN, y: tableTop }, thickness: 1, color: BORDER });
+  page.drawText("DESCRIPTION", { x: MARGIN + 12, y: tableTop - 15, size: 9, font: bold, color: TEXT_MUTED });
+  const amountLabel = "AMOUNT";
+  page.drawText(amountLabel, { x: colAmountX - font.widthOfTextAtSize(amountLabel, 9), y: tableTop - 15, size: 9, font: bold, color: TEXT_MUTED });
+
+  // Row content (payment method + wrapped transaction ID)
+  const descWidth = colAmountX - MARGIN - 24;
+  page.drawText(`Add Funds Deposit - ${input.payment.method}`, { x: MARGIN + 12, y: tableTop - 40, size: 10, font: bold, color: TEXT_DARK });
+  const trxBottom = drawWrapped(
+    page,
+    `Transaction ID: ${input.payment.transaction_id}`,
+    font,
+    9,
+    MARGIN + 12,
+    tableTop - 55,
+    descWidth,
+    13,
+    TEXT_MUTED
+  );
+
+  const amountValue = formatCurrency(input.payment.amount, input.payment.currency);
+  page.drawText(amountValue, { x: colAmountX - font.widthOfTextAtSize(amountValue, 10), y: tableTop - 40, size: 10, font: bold, color: TEXT_DARK });
+
+  // Bottom border of the table + totals (border tracks the wrapped trx id bottom)
+  const tableBottom = Math.min(trxBottom, tableTop - 55) - 10;
+  page.drawLine({ start: { x: MARGIN, y: tableBottom }, end: { x: PAGE_WIDTH - MARGIN, y: tableBottom }, thickness: 1, color: BORDER });
+  const totalLabel = "Amount Deposited";
+  page.drawText(totalLabel, { x: colAmountX - font.widthOfTextAtSize(totalLabel, 11), y: tableBottom - 20, size: 11, font: bold, color: TEXT_DARK });
+  const totalValue = formatCurrency(input.payment.amount, input.payment.currency);
+  page.drawText(totalValue, { x: colAmountX - font.widthOfTextAtSize(totalValue, 12), y: tableBottom - 21, size: 12, font: bold, color: ACCENT });
+
+  drawInvoiceFooter(page, font, bold, input.panel.name, input.timezone ?? null);
 
   return doc.save();
 }
