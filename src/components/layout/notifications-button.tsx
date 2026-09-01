@@ -17,6 +17,7 @@ import {
   PackageCheck,
   PackageX,
   RefreshCw,
+  Gift,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +37,7 @@ const typeIcon: Record<NotificationType, React.ComponentType<{ className?: strin
   system_announcement: Megaphone,
   ticket_reply: Ticket,
   order_status: RefreshCw,
+  referral_commission: Gift,
 };
 
 export function NotificationsButton() {

@@ -17,6 +17,7 @@ import {
   LogOut,
   Menu,
   Shield,
+  Users,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -43,6 +44,7 @@ const userNav = [
   { href: "/orders", label: "My Orders", icon: ShoppingCart },
   { href: "/add-funds", label: "Add Funds", icon: ArrowDownToLine },
   { href: "/transactions", label: "Transactions", icon: History },
+  { href: "/referrals", label: "Referrals", icon: Users },
   { href: "/support", label: "Support", icon: Headphones },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

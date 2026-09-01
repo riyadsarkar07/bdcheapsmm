@@ -34,6 +34,7 @@ const typeStyles: Record<TransactionType, "success" | "destructive" | "secondary
   order_deduction: "destructive",
   refund: "warning",
   adjustment: "secondary",
+  referral_commission: "success",
 };
 
 export function AdminTransactions({ transactions }: { transactions: TransactionRow[] }) {
@@ -72,6 +73,7 @@ export function AdminTransactions({ transactions }: { transactions: TransactionR
             <SelectItem value="order_deduction">Order charge</SelectItem>
             <SelectItem value="refund">Refund</SelectItem>
             <SelectItem value="adjustment">Adjustment</SelectItem>
+            <SelectItem value="referral_commission">Referral</SelectItem>
           </SelectContent>
         </Select>
       </div>

@@ -12,7 +12,7 @@ export default async function AdminUsersPage() {
   const supabase = await createClient();
   const { data: users } = await supabase
     .from("profiles")
-    .select("id, full_name, email, phone, balance, role, status, currency, country, timezone, avatar_url, created_at, updated_at")
+    .select("id, full_name, email, phone, balance, role, status, currency, country, timezone, referral_code, avatar_url, created_at, updated_at")
     .order("created_at", { ascending: false });
 
   return (

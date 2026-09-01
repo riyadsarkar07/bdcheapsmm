@@ -50,6 +50,7 @@ const transactionTypeMap: Record<TransactionType, { label: string; variant: "suc
   order_deduction: { label: "Order", variant: "destructive" },
   refund: { label: "Refund", variant: "info" },
   adjustment: { label: "Adjustment", variant: "secondary" },
+  referral_commission: { label: "Referral", variant: "info" },
 };
 
 export function TransactionTypeBadge({ type }: { type: TransactionType }) {

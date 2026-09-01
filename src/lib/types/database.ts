@@ -24,7 +24,8 @@ export type TransactionType =
   | "deposit"
   | "order_deduction"
   | "refund"
-  | "adjustment";
+  | "adjustment"
+  | "referral_commission";
 export type ProviderStatus = "active" | "inactive";
 export type NotificationType =
   | "payment_approved"
@@ -33,7 +34,8 @@ export type NotificationType =
   | "order_cancelled"
   | "system_announcement"
   | "ticket_reply"
-  | "order_status";
+  | "order_status"
+  | "referral_commission";
 export type LogAction =
   | "create"
   | "update"
@@ -52,7 +54,8 @@ export type LogAction =
   | "settings_update"
   | "coupon_apply"
   | "suspend"
-  | "unsuspend";
+  | "unsuspend"
+  | "referral_commission";
 
 export type Profile = {
   id: string;
@@ -66,6 +69,7 @@ export type Profile = {
   country: string | null;
   currency: string;
   timezone: string;
+  referral_code: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -278,6 +282,29 @@ export type Favorite = {
   updated_at: string;
 };
 
+export type Referral = {
+  id: string;
+  referrer_id: string;
+  referred_user_id: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ReferralCommission = {
+  id: string;
+  referrer_id: string;
+  referred_user_id: string;
+  payment_request_id: string;
+  transaction_id: string | null;
+  deposit_amount: number;
+  rate_percent: number;
+  amount: number;
+  currency: string;
+  status: PaymentStatus;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -486,12 +513,69 @@ export type Database = {
           }
         ];
       };
+      referrals: {
+        Row: Referral;
+        Insert: Partial<Referral>;
+        Update: Partial<Referral>;
+        Relationships: [
+          {
+            foreignKeyName: "referrals_referrer_id_fkey";
+            columns: ["referrer_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "referrals_referred_user_id_fkey";
+            columns: ["referred_user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      referral_commissions: {
+        Row: ReferralCommission;
+        Insert: Partial<ReferralCommission>;
+        Update: Partial<ReferralCommission>;
+        Relationships: [
+          {
+            foreignKeyName: "referral_commissions_referrer_id_fkey";
+            columns: ["referrer_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "referral_commissions_referred_user_id_fkey";
+            columns: ["referred_user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "referral_commissions_payment_request_id_fkey";
+            columns: ["payment_request_id"];
+            isOneToOne: false;
+            referencedRelation: "payment_requests";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "referral_commissions_transaction_id_fkey";
+            columns: ["transaction_id"];
+            isOneToOne: false;
+            referencedRelation: "transactions";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
       is_admin: { Args: Record<never, never>; Returns: boolean };
       is_banned: { Args: Record<never, never>; Returns: boolean };
       current_profile: { Args: Record<never, never>; Returns: Profile };
+      generate_referral_code: { Args: Record<never, never>; Returns: string };
       get_coupon: { Args: { p_code: string }; Returns: Coupon };
       deduct_order_cost: { Args: { p_order_id: string; p_user_id: string }; Returns: Order };
       create_ticket_with_message: {

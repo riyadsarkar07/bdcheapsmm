@@ -83,6 +83,16 @@ export interface FooterSettings {
   links: { label: string; href: string }[];
 }
 
+export interface ReferralSettings {
+  rate_percent: number;
+  enabled: boolean;
+}
+
+export const DEFAULT_REFERRAL_SETTINGS: ReferralSettings = {
+  rate_percent: 5,
+  enabled: true,
+};
+
 export interface PublicSettings {
   site: SiteSettings;
   general: GeneralSettings;

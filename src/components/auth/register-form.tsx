@@ -38,7 +38,7 @@ const formSchema = z
     path: ["confirmPassword"],
   });
 
-export function RegisterForm() {
+export function RegisterForm({ initialRef }: { initialRef?: string }) {
   const router = useRouter();
   const [showPassword, setShowPassword] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
@@ -51,7 +51,7 @@ export function RegisterForm() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setLoading(true);
     try {
-      const result = await signUpAction(values);
+      const result = await signUpAction({ ...values, ref: initialRef });
       if (result.success) {
         toast.success("Account created! Please verify your email to sign in.");
         router.push("/login?verification=1");
@@ -76,6 +76,12 @@ export function RegisterForm() {
           Join BD Cheap SMM and start ordering today
         </p>
       </div>
+
+      {initialRef ? (
+        <p className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-center text-xs text-primary">
+          You were referred by a friend — welcome aboard!
+        </p>
+      ) : null}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

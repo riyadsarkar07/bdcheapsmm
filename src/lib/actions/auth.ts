@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { signInSchema, signUpSchema, forgotPasswordSchema, resetPasswordSchema } from "@/lib/validations";
+import { signInSchema, signUpSchema, forgotPasswordSchema, resetPasswordSchema, refCodeSchema } from "@/lib/validations";
 import { fail, ok, isAdminProfile, type ActionResult } from "@/lib/guards";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { writeLog } from "@/lib/audit";
@@ -64,6 +64,7 @@ export async function signUpAction(input: {
   fullName: string;
   email: string;
   password: string;
+  ref?: string;
 }): Promise<ActionResult<{ redirect: string }>> {
   const headerStore = await headers();
   const ip = getClientIp(headerStore);
@@ -77,6 +78,9 @@ export async function signUpAction(input: {
     return fail(parsed.error.errors[0]?.message ?? "Invalid input");
   }
 
+  const ref = (input.ref ?? "").trim().slice(0, 20).toUpperCase();
+  const refMeta = refCodeSchema.safeParse(ref).success ? { ref } : {};
+
   const { createClient } = await import("@/lib/supabase/server");
   const supabase = await createClient();
 
@@ -86,6 +90,7 @@ export async function signUpAction(input: {
     options: {
       data: {
         full_name: parsed.data.fullName,
+        ...refMeta,
       },
       emailRedirectTo: `${APP_URL}/auth/callback`,
     },

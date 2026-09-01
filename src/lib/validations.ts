@@ -228,3 +228,19 @@ export const apiKeyCreateSchema = z.object({
   permissions: z.array(z.string()).default([]),
   expiresAt: z.string().optional().nullable(),
 });
+
+export const refCodeSchema = z
+  .string()
+  .max(20, "Invalid referral code")
+  .regex(/^[A-Z0-9]+$/, "Invalid referral code")
+  .optional()
+  .or(z.literal(""));
+
+export const referralSettingsSchema = z.object({
+  ratePercent: z.coerce
+    .number()
+    .min(0, "Rate cannot be negative")
+    .max(100, "Rate cannot exceed 100%")
+    .refine((v) => v <= 100 && v >= 0, "Rate must be between 0 and 100"),
+  enabled: z.boolean().default(true),
+});
