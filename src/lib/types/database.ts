@@ -68,6 +68,7 @@ export type Profile = {
   phone: string | null;
   avatar_url: string | null;
   balance: number;
+  coin_balance: number;
   role: AppRole;
   status: UserStatus;
   country: string | null;
@@ -383,6 +384,8 @@ export type LoginStreak = {
   longest_streak: number;
   last_claim_date: string | null;
   total_claims: number;
+  cycle_start_date: string | null;
+  cycle_coins: number;
   updated_at: string;
 };
 
@@ -394,6 +397,8 @@ export type LoginReward = {
   amount: number;
   currency: string;
   transaction_id: string | null;
+  coins: number;
+  usd_value: number;
   created_at: string;
 };
 

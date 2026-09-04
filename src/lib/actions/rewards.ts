@@ -4,11 +4,13 @@ import { fail, ok, requireUser, type ActionResult } from "@/lib/guards";
 import { rateLimit } from "@/lib/rate-limit";
 
 export type ClaimRewardResult = {
-  amount: number;
-  currency: string;
+  coins: number;
+  usdValue: number;
   streak: number;
   claimDate: string;
-  balance: number;
+  coinBalance: number;
+  cycleCoins: number;
+  cycleRemaining: number;
 };
 
 export async function claimDailyLoginRewardAction(): Promise<ActionResult<ClaimRewardResult>> {
@@ -31,20 +33,24 @@ export async function claimDailyLoginRewardAction(): Promise<ActionResult<ClaimR
   }
 
   const payload = (data ?? {}) as {
-    amount?: number;
-    currency?: string;
+    coins?: number;
+    usd_value?: number;
     streak?: number;
     claim_date?: string;
-    balance?: number;
+    coin_balance?: number;
+    cycle_coins?: number;
+    cycle_remaining?: number;
   };
 
   return ok(
     {
-      amount: Number(payload.amount ?? 0),
-      currency: payload.currency ?? user.currency,
+      coins: Number(payload.coins ?? 0),
+      usdValue: Number(payload.usd_value ?? 0),
       streak: Number(payload.streak ?? 1),
       claimDate: String(payload.claim_date ?? ""),
-      balance: Number(payload.balance ?? 0),
+      coinBalance: Number(payload.coin_balance ?? 0),
+      cycleCoins: Number(payload.cycle_coins ?? 0),
+      cycleRemaining: Number(payload.cycle_remaining ?? 0),
     },
     "Daily reward claimed."
   );

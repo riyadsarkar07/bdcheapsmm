@@ -159,6 +159,9 @@ export function AppShell({
                 maximumFractionDigits: 2,
               })}
             </Badge>
+            <Badge variant="secondary" className="hidden font-semibold sm:inline-flex">
+              {Number(profile.coin_balance ?? 0).toLocaleString("en-US")} Coins
+            </Badge>
             <NotificationsButton />
             <ThemeToggle />
             <DropdownMenu>

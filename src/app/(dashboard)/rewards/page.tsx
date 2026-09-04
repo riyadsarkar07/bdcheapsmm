@@ -35,13 +35,13 @@ export default async function RewardsPage() {
     <div>
       <PageHeader
         title="Daily Login Reward"
-        description="Claim once per day, keep your streak, and earn bonus wallet credit."
+        description="Earn Coins for logging in. A full 30-day cycle is 150 Coins ($0.15). 1 Coin = $0.001."
       />
       <DailyLogin
         streak={streak}
         history={history ?? []}
         claimedToday={claimedToday}
-        currency={user.currency}
+        coinBalance={user.coin_balance ?? 0}
       />
     </div>
   );
