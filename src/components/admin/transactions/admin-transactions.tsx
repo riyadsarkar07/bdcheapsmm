@@ -35,6 +35,7 @@ const typeStyles: Record<TransactionType, "success" | "destructive" | "secondary
   refund: "warning",
   adjustment: "secondary",
   referral_commission: "success",
+  login_reward: "success",
 };
 
 export function AdminTransactions({ transactions }: { transactions: TransactionRow[] }) {
@@ -74,6 +75,7 @@ export function AdminTransactions({ transactions }: { transactions: TransactionR
             <SelectItem value="refund">Refund</SelectItem>
             <SelectItem value="adjustment">Adjustment</SelectItem>
             <SelectItem value="referral_commission">Referral</SelectItem>
+            <SelectItem value="login_reward">Login reward</SelectItem>
           </SelectContent>
         </Select>
       </div>

@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   Layers,
   ShoppingCart,
-  Wallet,
   ArrowDownToLine,
   Headphones,
   Settings,
@@ -18,6 +17,10 @@ import {
   Menu,
   Shield,
   Users,
+  Megaphone,
+  Target,
+  Gift,
+  Lightbulb,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -42,6 +45,10 @@ const userNav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/services", label: "Services", icon: Layers },
   { href: "/orders", label: "My Orders", icon: ShoppingCart },
+  { href: "/notices", label: "Notice Board", icon: Megaphone },
+  { href: "/goals", label: "Order Goals", icon: Target },
+  { href: "/rewards", label: "Daily Reward", icon: Gift },
+  { href: "/advisor", label: "Service Advisor", icon: Lightbulb },
   { href: "/add-funds", label: "Add Funds", icon: ArrowDownToLine },
   { href: "/transactions", label: "Transactions", icon: History },
   { href: "/referrals", label: "Referrals", icon: Users },
@@ -52,10 +59,12 @@ const userNav = [
 export function AppShell({
   profile,
   siteName,
+  unreadNotices = 0,
   children,
 }: {
   profile: Profile;
   siteName: string;
+  unreadNotices?: number;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -87,7 +96,12 @@ export function AppShell({
               )}
             >
               <item.icon className="h-4 w-4" />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.href === "/notices" && unreadNotices > 0 ? (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full gradient-bg px-1.5 text-[10px] font-bold text-white">
+                  {unreadNotices > 9 ? "9+" : unreadNotices}
+                </span>
+              ) : null}
             </Link>
           );
         })}

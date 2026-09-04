@@ -51,9 +51,10 @@ const transactionTypeMap: Record<TransactionType, { label: string; variant: "suc
   refund: { label: "Refund", variant: "info" },
   adjustment: { label: "Adjustment", variant: "secondary" },
   referral_commission: { label: "Referral", variant: "info" },
+  login_reward: { label: "Login reward", variant: "success" },
 };
 
 export function TransactionTypeBadge({ type }: { type: TransactionType }) {
-  const config = transactionTypeMap[type];
+  const config = transactionTypeMap[type] ?? { label: type, variant: "secondary" as const };
   return <Badge variant={config.variant}>{config.label}</Badge>;
 }

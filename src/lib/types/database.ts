@@ -25,7 +25,8 @@ export type TransactionType =
   | "order_deduction"
   | "refund"
   | "adjustment"
-  | "referral_commission";
+  | "referral_commission"
+  | "login_reward";
 export type ProviderStatus = "active" | "inactive";
 export type NotificationType =
   | "payment_approved"
@@ -340,6 +341,62 @@ export type ProviderHealth = {
   updated_at: string;
 };
 
+export type NoticeCategory = "announcement" | "update" | "maintenance" | "offer";
+
+export type Notice = {
+  id: string;
+  title: string;
+  body: string | null;
+  category: NoticeCategory;
+  is_published: boolean;
+  published_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type NoticeRead = {
+  notice_id: string;
+  user_id: string;
+  read_at: string;
+};
+
+export type OrderGoalMetric = "followers" | "views" | "likes" | "comments" | "custom";
+export type OrderGoalStatus = "active" | "completed" | "cancelled";
+
+export type OrderGoal = {
+  id: string;
+  user_id: string;
+  title: string;
+  metric: OrderGoalMetric;
+  target_quantity: number;
+  service_id: string | null;
+  link: string | null;
+  status: OrderGoalStatus;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LoginStreak = {
+  user_id: string;
+  current_streak: number;
+  longest_streak: number;
+  last_claim_date: string | null;
+  total_claims: number;
+  updated_at: string;
+};
+
+export type LoginReward = {
+  id: string;
+  user_id: string;
+  claim_date: string;
+  streak_day: number;
+  amount: number;
+  currency: string;
+  transaction_id: string | null;
+  created_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -632,6 +689,82 @@ export type Database = {
           }
         ];
       };
+      notices: {
+        Row: Notice;
+        Insert: Partial<Notice>;
+        Update: Partial<Notice>;
+        Relationships: [];
+      };
+      notice_reads: {
+        Row: NoticeRead;
+        Insert: Partial<NoticeRead> & { notice_id: string; user_id: string };
+        Update: Partial<NoticeRead>;
+        Relationships: [
+          {
+            foreignKeyName: "notice_reads_notice_id_fkey";
+            columns: ["notice_id"];
+            isOneToOne: false;
+            referencedRelation: "notices";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notice_reads_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      order_goals: {
+        Row: OrderGoal;
+        Insert: Partial<OrderGoal> & { user_id: string; title: string; target_quantity: number };
+        Update: Partial<OrderGoal>;
+        Relationships: [
+          {
+            foreignKeyName: "order_goals_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "order_goals_service_id_fkey";
+            columns: ["service_id"];
+            isOneToOne: false;
+            referencedRelation: "services";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      login_streaks: {
+        Row: LoginStreak;
+        Insert: Partial<LoginStreak> & { user_id: string };
+        Update: Partial<LoginStreak>;
+        Relationships: [
+          {
+            foreignKeyName: "login_streaks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      login_rewards: {
+        Row: LoginReward;
+        Insert: Partial<LoginReward> & { user_id: string; claim_date: string; streak_day: number; amount: number };
+        Update: Partial<LoginReward>;
+        Relationships: [
+          {
+            foreignKeyName: "login_rewards_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -721,6 +854,10 @@ export type Database = {
       revoke_other_user_sessions: {
         Args: { p_current_session: string };
         Returns: number;
+      };
+      claim_daily_login_reward: {
+        Args: Record<never, never>;
+        Returns: Json;
       };
     };
     Enums: {

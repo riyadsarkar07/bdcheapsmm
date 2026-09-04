@@ -244,3 +244,34 @@ export const referralSettingsSchema = z.object({
     .refine((v) => v <= 100 && v >= 0, "Rate must be between 0 and 100"),
   enabled: z.boolean().default(true),
 });
+
+export const noticeSchema = z.object({
+  title: z.string().min(3, "Title is required").max(200),
+  body: z.string().max(5000).optional().or(z.literal("")),
+  category: z.enum(["announcement", "update", "maintenance", "offer"]),
+  isPublished: z.boolean().default(false),
+});
+
+export const orderGoalSchema = z.object({
+  title: z.string().min(2, "Title is required").max(120),
+  metric: z.enum(["followers", "views", "likes", "comments", "custom"]),
+  targetQuantity: z.coerce
+    .number()
+    .int("Target must be a whole number")
+    .min(1, "Target must be at least 1")
+    .max(100000000, "Target is too large"),
+  serviceId: z.union([z.string().uuid(), z.literal("")]).optional().nullable(),
+  link: z
+    .string()
+    .max(2048)
+    .optional()
+    .or(z.literal(""))
+    .refine(
+      (v) => !v || /^https?:\/\/.+/i.test(v),
+      "Enter a valid URL starting with http:// or https://"
+    ),
+});
+
+export const advisorQuerySchema = z.object({
+  goal: z.string().min(3, "Describe your goal").max(400),
+});

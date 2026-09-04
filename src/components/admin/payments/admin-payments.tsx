@@ -49,6 +49,47 @@ type PaymentRow = {
   profiles?: { full_name: string | null; email: string | null } | null;
 };
 
+function PaymentScreenshot({
+  paymentId,
+  screenshotUrl,
+}: {
+  paymentId: string;
+  screenshotUrl: string | null;
+}) {
+  const fallback = `/api/payments/${paymentId}/screenshot`;
+  const [src, setSrc] = React.useState(screenshotUrl || fallback);
+  const [failed, setFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setSrc(screenshotUrl || fallback);
+    setFailed(false);
+  }, [paymentId, screenshotUrl, fallback]);
+
+  if (failed) {
+    return (
+      <p className="rounded-lg bg-muted/50 p-3 text-center text-sm text-muted-foreground">
+        No screenshot uploaded.
+      </p>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt="Payment screenshot"
+      className="w-full rounded-lg border object-contain"
+      onError={() => {
+        if (src !== fallback) {
+          setSrc(fallback);
+          return;
+        }
+        setFailed(true);
+      }}
+    />
+  );
+}
+
 export function AdminPayments({ payments }: { payments: PaymentRow[] }) {
   const router = useRouter();
   const [search, setSearch] = React.useState("");
@@ -246,18 +287,7 @@ export function AdminPayments({ payments }: { payments: PaymentRow[] }) {
                   <p>{viewing.note}</p>
                 </div>
               ) : null}
-              {viewing.screenshot_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={viewing.screenshot_url}
-                  alt="Payment screenshot"
-                  className="w-full rounded-lg border object-contain"
-                />
-              ) : (
-                <p className="rounded-lg bg-muted/50 p-3 text-center text-sm text-muted-foreground">
-                  No screenshot uploaded.
-                </p>
-              )}
+              <PaymentScreenshot paymentId={viewing.id} screenshotUrl={viewing.screenshot_url} />
               {viewing.status === "approved" ? (
                 <div className="flex justify-end pt-1">
                   <Button asChild variant="outline" size="sm">

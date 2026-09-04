@@ -1,34 +1,75 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/types/database";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const BUCKET = "payment-proofs";
-const SIGNED_URL_EXPIRY = 7 * 24 * 60 * 60; // 7 days
+const SIGNED_URL_EXPIRY = 60 * 60;
 
-/**
- * Resolve a stored screenshot path (e.g. "payments/...") into a signed URL so
- * it can be rendered. The `payment-proofs` bucket is private, so plain public
- * URLs are never used. Returns the original value for legacy absolute URLs.
- */
+export function extractPaymentProofPath(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      const pathname = decodeURIComponent(url.pathname);
+      const needle = `/${BUCKET}/`;
+      const idx = pathname.indexOf(needle);
+      if (idx !== -1) {
+        return pathname.slice(idx + needle.length).replace(/^\/+/, "");
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  let path = trimmed.replace(/^\/+/, "");
+  if (path.startsWith(`${BUCKET}/`)) {
+    path = path.slice(BUCKET.length + 1);
+  }
+  return path || null;
+}
+
+export async function signPaymentProofPath(path: string): Promise<string | null> {
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin.storage
+      .from(BUCKET)
+      .createSignedUrl(path, SIGNED_URL_EXPIRY);
+    if (error || !data?.signedUrl) return null;
+    return data.signedUrl;
+  } catch {
+    return null;
+  }
+}
+
 export async function resolveScreenshotUrl(
-  supabase: SupabaseClient<Database>,
+  _supabase: SupabaseClient<Database>,
   value: string | null
 ): Promise<string | null> {
   if (!value) return null;
-  if (/^https?:\/\//.test(value)) return value;
-  const { data } = await supabase.storage
-    .from(BUCKET)
-    .createSignedUrl(value, SIGNED_URL_EXPIRY);
-  return data?.signedUrl ?? null;
+  const path = extractPaymentProofPath(value);
+  if (!path) {
+    if (/^https?:\/\//i.test(value)) return value;
+    return null;
+  }
+  return (await signPaymentProofPath(path)) ?? null;
 }
 
-export async function resolveScreenshotUrls<T extends { screenshot_url: string | null }>(
+export async function resolveScreenshotUrls<T extends { id: string; screenshot_url: string | null }>(
   supabase: SupabaseClient<Database>,
   rows: T[]
 ): Promise<T[]> {
   return Promise.all(
-    rows.map(async (row) => ({
-      ...row,
-      screenshot_url: await resolveScreenshotUrl(supabase, row.screenshot_url),
-    }))
+    rows.map(async (row) => {
+      if (!row.screenshot_url) return row;
+      const signed = await resolveScreenshotUrl(supabase, row.screenshot_url);
+      return {
+        ...row,
+        screenshot_url: signed ?? `/api/payments/${row.id}/screenshot`,
+      };
+    })
   );
 }

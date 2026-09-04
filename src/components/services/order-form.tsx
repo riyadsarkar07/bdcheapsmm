@@ -19,9 +19,19 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { createOrderAction } from "@/lib/actions/orders";
+import { checkUrlConflictAction, type UrlConflict } from "@/lib/actions/url-check";
 import { formatUsd } from "@/lib/utils";
 import { computeOrderCharge } from "@/lib/pricing";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 
 const formSchema = z.object({
   quantity: z.coerce
@@ -62,6 +72,8 @@ export function OrderForm({
   const [couponStatus, setCouponStatus] = React.useState<
     "idle" | "applied" | "invalid"
   >("idle");
+  const [conflicts, setConflicts] = React.useState<UrlConflict[] | null>(null);
+  const [pendingValues, setPendingValues] = React.useState<z.infer<typeof formSchema> | null>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -72,7 +84,7 @@ export function OrderForm({
   // pricePerUnit is per 1000 units, so the total is (price/1000) x quantity.
   const total = computeOrderCharge(pricePerUnit, quantity);
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
+  async function placeOrder(values: z.infer<typeof formSchema>) {
     setLoading(true);
     try {
       const result = await createOrderAction({
@@ -85,12 +97,30 @@ export function OrderForm({
         toast.success(`Order ${result.data.orderNumber} placed successfully!`);
         setCouponStatus("idle");
         form.setValue("coupon", "");
+        setConflicts(null);
+        setPendingValues(null);
         queryClient.invalidateQueries({ queryKey: ["profile-balance"] });
         router.push(`/orders/${result.data.orderId}`);
         router.refresh();
       } else {
         toast.error(result.error ?? "Failed to place order");
       }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setLoading(true);
+    try {
+      const check = await checkUrlConflictAction({ link: values.link, serviceId });
+      const found = check.success ? (check.data?.conflicts ?? []) : [];
+      if (found.length > 0) {
+        setPendingValues(values);
+        setConflicts(found);
+        return;
+      }
+      await placeOrder(values);
     } finally {
       setLoading(false);
     }
@@ -223,6 +253,46 @@ export function OrderForm({
           </Button>
         </form>
       </Form>
+
+      <Dialog open={!!conflicts} onOpenChange={(open) => !open && setConflicts(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-warning" />
+              Duplicate URL warning
+            </DialogTitle>
+            <DialogDescription>
+              This link already has an active order. Continuing may overlap delivery. Confirm only if this is intentional.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {(conflicts ?? []).map((c) => (
+              <div key={c.orderId} className="rounded-lg border p-3 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-medium">#{c.orderNumber}</p>
+                  <Badge variant="warning">{c.status}</Badge>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {c.serviceName ?? "Service"} · Qty {c.quantity.toLocaleString()}
+                </p>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setConflicts(null); setPendingValues(null); }}>
+              Cancel
+            </Button>
+            <Button
+              variant="gradient"
+              disabled={loading || !pendingValues}
+              onClick={() => pendingValues && placeOrder(pendingValues)}
+            >
+              {loading ? <Loader2 className="animate-spin" /> : null}
+              Continue anyway
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }

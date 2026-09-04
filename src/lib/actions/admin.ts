@@ -11,6 +11,7 @@ import {
   adminUserSchema,
   apiKeyCreateSchema,
   balanceAdjustSchema,
+  noticeSchema,
 } from "@/lib/validations";
 import { fail, ok, requireAdmin, type ActionResult } from "@/lib/guards";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
@@ -978,4 +979,126 @@ export async function toggleApiKeyAction(id: string, isActive: boolean): Promise
   if (updateError) return fail(updateError.message);
   await writeLog({ userId: user.id, action: "update", entityType: "api_keys", entityId: id, description: `${isActive ? "Enabled" : "Disabled"} API key` });
   return ok(undefined, isActive ? "API key enabled." : "API key disabled.");
+}
+
+export async function createNoticeAction(input: unknown): Promise<ActionResult> {
+  const { user, error } = await requireAdmin();
+  if (error || !user) return fail(error ?? "Not authenticated");
+  const parsed = noticeSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.errors[0]?.message ?? "Invalid notice");
+
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { data, error: insertError } = await supabase
+    .from("notices")
+    .insert({
+      title: parsed.data.title,
+      body: parsed.data.body || null,
+      category: parsed.data.category,
+      is_published: parsed.data.isPublished,
+      published_at: parsed.data.isPublished ? new Date().toISOString() : null,
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
+  if (insertError) return fail(insertError.message);
+
+  await writeLog({
+    userId: user.id,
+    action: "create",
+    entityType: "notices",
+    entityId: data.id,
+    description: `Created notice ${parsed.data.title}`,
+  });
+  return ok(undefined, parsed.data.isPublished ? "Notice published." : "Notice saved as draft.");
+}
+
+export async function updateNoticeAction(id: string, input: unknown): Promise<ActionResult> {
+  const { user, error } = await requireAdmin();
+  if (error || !user) return fail(error ?? "Not authenticated");
+  const parsed = noticeSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.errors[0]?.message ?? "Invalid notice");
+
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("notices")
+    .select("is_published, published_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (!existing) return fail("Notice not found.");
+
+  const publishedAt = parsed.data.isPublished
+    ? existing.published_at ?? new Date().toISOString()
+    : existing.published_at;
+
+  const { error: updateError } = await supabase
+    .from("notices")
+    .update({
+      title: parsed.data.title,
+      body: parsed.data.body || null,
+      category: parsed.data.category,
+      is_published: parsed.data.isPublished,
+      published_at: parsed.data.isPublished ? publishedAt : existing.published_at,
+    })
+    .eq("id", id);
+  if (updateError) return fail(updateError.message);
+
+  await writeLog({
+    userId: user.id,
+    action: "update",
+    entityType: "notices",
+    entityId: id,
+    description: `Updated notice ${parsed.data.title}`,
+  });
+  return ok(undefined, "Notice updated.");
+}
+
+export async function deleteNoticeAction(id: string): Promise<ActionResult> {
+  const { user, error } = await requireAdmin();
+  if (error || !user) return fail(error ?? "Not authenticated");
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { data: existing } = await supabase.from("notices").select("title").eq("id", id).maybeSingle();
+  const { error: delError } = await supabase.from("notices").delete().eq("id", id);
+  if (delError) return fail(delError.message);
+  await writeLog({
+    userId: user.id,
+    action: "delete",
+    entityType: "notices",
+    entityId: id,
+    description: `Deleted notice ${existing?.title ?? ""}`,
+  });
+  return ok(undefined, "Notice deleted.");
+}
+
+export async function toggleNoticePublishAction(id: string, isPublished: boolean): Promise<ActionResult> {
+  const { user, error } = await requireAdmin();
+  if (error || !user) return fail(error ?? "Not authenticated");
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("notices")
+    .select("published_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (!existing) return fail("Notice not found.");
+
+  const { error: updateError } = await supabase
+    .from("notices")
+    .update({
+      is_published: isPublished,
+      published_at: isPublished ? existing.published_at ?? new Date().toISOString() : existing.published_at,
+    })
+    .eq("id", id);
+  if (updateError) return fail(updateError.message);
+
+  await writeLog({
+    userId: user.id,
+    action: "update",
+    entityType: "notices",
+    entityId: id,
+    description: `${isPublished ? "Published" : "Unpublished"} notice`,
+  });
+  return ok(undefined, isPublished ? "Notice published." : "Notice unpublished.");
 }
