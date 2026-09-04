@@ -15,6 +15,8 @@ import {
   coinsForStreakDay,
   formatCoinUsd,
   formatCoins,
+  rewardCoinsFromRow,
+  thirtyDaySchedule,
 } from "@/lib/coins";
 import { formatDate } from "@/lib/utils";
 import type { LoginReward, LoginStreak } from "@/lib/types/database";
@@ -24,23 +26,24 @@ export function DailyLogin({
   history,
   claimedToday,
   coinBalance,
+  nextStreak,
 }: {
   streak: LoginStreak | null;
   history: LoginReward[];
   claimedToday: boolean;
   coinBalance: number;
+  nextStreak: number;
 }) {
   const router = useRouter();
   const [loading, setLoading] = React.useState(false);
   const current = streak?.current_streak ?? 0;
-  const cycleCoins = streak?.cycle_coins ?? 0;
+  const cycleCoins = Math.min(LOGIN_CYCLE_MAX_COINS, Math.max(0, streak?.cycle_coins ?? 0));
   const cycleRemaining = Math.max(0, LOGIN_CYCLE_MAX_COINS - cycleCoins);
-  const nextStreak = claimedToday ? current + 1 : current + 1 || 1;
   const nextLadderCoins = coinsForStreakDay(nextStreak);
-  const nextCoins = claimedToday
-    ? Math.min(coinsForStreakDay(current + 1), cycleRemaining)
-    : Math.min(nextLadderCoins, cycleRemaining);
+  const nextCoins = Math.min(nextLadderCoins, cycleRemaining);
   const cyclePercent = Math.min(100, Math.round((cycleCoins / LOGIN_CYCLE_MAX_COINS) * 100));
+  const schedule = thirtyDaySchedule();
+  const position = current === 0 ? 0 : ((current - 1) % 7) + 1;
 
   async function claim() {
     setLoading(true);
@@ -112,9 +115,9 @@ export function DailyLogin({
             <div className="grid grid-cols-7 gap-1.5">
               {LOGIN_LADDER.map((coins, i) => {
                 const day = i + 1;
-                const position = current === 0 ? 0 : ((current - 1) % 7) + 1;
                 const earned = claimedToday ? position >= day : position > day;
-                const isNext = !claimedToday && (current === 0 ? day === 1 : position + 1 === day || (position === 7 && day === 1));
+                const isNext =
+                  !claimedToday && (current === 0 ? day === 1 : ((nextStreak - 1) % 7) + 1 === day);
                 return (
                   <div
                     key={day}
@@ -127,12 +130,30 @@ export function DailyLogin({
                     }`}
                   >
                     <p className="text-[10px] text-muted-foreground">Day {day}</p>
-                    <p className="mt-1 font-semibold">{coins}</p>
+                    <p className="mt-1 font-semibold">{coins} Coins</p>
                     <p className="text-[10px] text-muted-foreground">{formatCoinUsd(coins)}</p>
                   </div>
                 );
               })}
             </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-medium">30-day coin schedule</p>
+            <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-10">
+              {schedule.map((coins, i) => {
+                const day = i + 1;
+                return (
+                  <div key={day} className="rounded-md bg-muted/40 p-1.5 text-center">
+                    <p className="text-[10px] text-muted-foreground">D{day}</p>
+                    <p className="text-[11px] font-semibold">{coins}</p>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              4 weeks of 36 Coins plus Day 29-30 (3 + 3) = exactly 150 Coins ($0.15).
+            </p>
           </div>
 
           <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
@@ -146,11 +167,16 @@ export function DailyLogin({
                   : `Next reward: ${formatCoins(nextCoins)} (${formatCoinUsd(nextCoins)}).`}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              One claim per day (Asia/Dhaka). Missing a day resets the streak to Day 1. Duplicate claims are blocked.
+              One claim per Dhaka calendar day. Missing a day resets the 7-day streak to Day 1. Duplicate claims are blocked. USD wallet is never credited.
             </p>
           </div>
 
-          <Button variant="gradient" className="w-full" onClick={claim} disabled={loading || claimedToday || (!claimedToday && cycleRemaining === 0)}>
+          <Button
+            variant="gradient"
+            className="w-full"
+            onClick={claim}
+            disabled={loading || claimedToday || (!claimedToday && cycleRemaining === 0)}
+          >
             {loading ? <Loader2 className="animate-spin" /> : <Gift />}
             {claimedToday ? "Already claimed today" : cycleRemaining === 0 ? "Cycle complete" : "Claim today's coins"}
           </Button>
@@ -169,7 +195,7 @@ export function DailyLogin({
           ) : (
             <div className="space-y-2">
               {history.map((row) => {
-                const coins = row.coins ?? row.amount;
+                const coins = rewardCoinsFromRow(row);
                 return (
                   <div key={row.id} className="flex items-center justify-between rounded-lg border p-3 text-sm">
                     <div>

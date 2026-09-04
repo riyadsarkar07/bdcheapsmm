@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { fail, ok, requireUser, type ActionResult } from "@/lib/guards";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -26,8 +27,12 @@ export async function claimDailyLoginRewardAction(): Promise<ActionResult<ClaimR
 
   if (rpcError) {
     const message = rpcError.message ?? "";
-    if (message.toLowerCase().includes("already claimed")) {
+    const lower = message.toLowerCase();
+    if (lower.includes("already claimed")) {
       return fail("You already claimed today's reward.");
+    }
+    if (lower.includes("cycle coin limit")) {
+      return fail("This 30-day cycle already reached 150 Coins ($0.15).");
     }
     return fail(message || "Failed to claim reward.");
   }
@@ -42,10 +47,16 @@ export async function claimDailyLoginRewardAction(): Promise<ActionResult<ClaimR
     cycle_remaining?: number;
   };
 
+  const coins = Math.max(0, Math.trunc(Number(payload.coins ?? 0)));
+  const usdValue = Number(payload.usd_value ?? coins * 0.001);
+
+  revalidatePath("/rewards");
+  revalidatePath("/dashboard");
+
   return ok(
     {
-      coins: Number(payload.coins ?? 0),
-      usdValue: Number(payload.usd_value ?? 0),
+      coins,
+      usdValue,
       streak: Number(payload.streak ?? 1),
       claimDate: String(payload.claim_date ?? ""),
       coinBalance: Number(payload.coin_balance ?? 0),
