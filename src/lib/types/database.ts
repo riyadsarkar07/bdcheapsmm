@@ -35,7 +35,8 @@ export type NotificationType =
   | "system_announcement"
   | "ticket_reply"
   | "order_status"
-  | "referral_commission";
+  | "referral_commission"
+  | "security_alert";
 export type LogAction =
   | "create"
   | "update"
@@ -55,7 +56,9 @@ export type LogAction =
   | "coupon_apply"
   | "suspend"
   | "unsuspend"
-  | "referral_commission";
+  | "referral_commission"
+  | "security_alert"
+  | "provider_health";
 
 export type Profile = {
   id: string;
@@ -302,6 +305,38 @@ export type ReferralCommission = {
   currency: string;
   status: PaymentStatus;
   created_at: string;
+  updated_at: string;
+};
+
+export type UserSession = {
+  id: string;
+  user_id: string;
+  auth_session_id: string | null;
+  user_agent: string;
+  browser: string | null;
+  os: string | null;
+  device: string;
+  device_type: string;
+  city: string | null;
+  region: string | null;
+  country: string | null;
+  last_seen_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProviderHealthStatus = "healthy" | "slow" | "down" | "unknown";
+
+export type ProviderHealth = {
+  provider_id: string;
+  status: ProviderHealthStatus;
+  latency_ms: number | null;
+  last_checked_at: string | null;
+  last_success_at: string | null;
+  last_failure_at: string | null;
+  last_error: string | null;
+  total_checks: number;
+  total_failures: number;
   updated_at: string;
 };
 
@@ -569,6 +604,34 @@ export type Database = {
           }
         ];
       };
+      user_sessions: {
+        Row: UserSession;
+        Insert: Partial<UserSession>;
+        Update: Partial<UserSession>;
+        Relationships: [
+          {
+            foreignKeyName: "user_sessions_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      provider_health: {
+        Row: ProviderHealth;
+        Insert: Partial<ProviderHealth>;
+        Update: Partial<ProviderHealth>;
+        Relationships: [
+          {
+            foreignKeyName: "provider_health_provider_id_fkey";
+            columns: ["provider_id"];
+            isOneToOne: false;
+            referencedRelation: "providers";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -638,6 +701,26 @@ export type Database = {
       sync_provider_services: {
         Args: { p_provider_id: string; p_items: unknown };
         Returns: { imported: number; updated: number }[];
+      };
+      list_user_sessions: {
+        Args: Record<never, never>;
+        Returns: {
+          id: string;
+          created_at: string;
+          last_seen_at: string;
+          user_agent: string | null;
+          city: string | null;
+          region: string | null;
+          country: string | null;
+        }[];
+      };
+      revoke_user_session: {
+        Args: { p_session_id: string };
+        Returns: boolean;
+      };
+      revoke_other_user_sessions: {
+        Args: { p_current_session: string };
+        Returns: number;
       };
     };
     Enums: {

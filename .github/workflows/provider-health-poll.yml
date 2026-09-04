@@ -1,0 +1,35 @@
+name: Provider Health Poll
+
+on:
+  schedule:
+    # Probe provider API availability every 10 minutes.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-health-poll
+  cancel-in-progress: false
+
+env:
+  # Production base URL of the deployed app. Override with the repository
+  # variable PROD_BASE_URL (must include the protocol) if the domain differs.
+  BASE_URL: ${{ vars.PROD_BASE_URL || 'https://bdcheapsmm.vercel.app' }}
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger provider health checks
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRON_SECRET is not configured as a GitHub Actions repository secret; add it so the poll authenticates with the cron endpoint."
+            exit 1
+          fi
+          curl -fsS --max-time 120 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${BASE_URL}/api/cron/provider-health"

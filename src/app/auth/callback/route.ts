@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { registerLoginSecurity } from "@/lib/session-security";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -8,8 +9,17 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      const userId = data.session?.user?.id;
+      if (userId) {
+        await registerLoginSecurity({
+          userId,
+          accessToken: data.session?.access_token,
+          headers: request.headers,
+          logLogin: "existing",
+        });
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
   }

@@ -15,6 +15,7 @@ import {
 import { fail, ok, requireAdmin, type ActionResult } from "@/lib/guards";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { providerApi, parseServiceType } from "@/lib/provider/smmfollow";
+import { probeProvider, recordProviderHealth, deriveHealth } from "@/lib/provider-health";
 import { slugify, formatUsd } from "@/lib/utils";
 import { writeLog } from "@/lib/audit";
 import { createNotification, notifyAllAdmins } from "@/lib/notify";
@@ -486,6 +487,51 @@ export async function testProviderConnectionAction(providerId: string): Promise<
   } catch (err) {
     return fail(`Connection failed: ${(err as Error).message}`);
   }
+}
+
+export async function checkProviderHealthAction(providerId: string): Promise<
+  ActionResult<{ status: "healthy" | "slow" | "down"; latencyMs: number }>
+> {
+  const { user, error } = await requireAdmin();
+  if (error || !user) return fail(error ?? "Not authenticated");
+
+  const limited = await rateLimit(`provider-health:${user.id}`, 10, 60);
+  if (!limited.success) return fail("Too many requests. Please wait.");
+
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { data: provider } = await supabase.from("providers").select("*").eq("id", providerId).single();
+  if (!provider) return fail("Provider not found.");
+  if (!provider.api_url || !provider.api_key) {
+    return fail("Provider API URL/key is not configured.");
+  }
+
+  const result = await probeProvider(provider);
+  const status = deriveHealth(result);
+  await recordProviderHealth(supabase, provider.id, result);
+
+  await writeLog({
+    userId: user.id,
+    action: "provider_health",
+    entityType: "providers",
+    entityId: provider.id,
+    description: `Health check for ${provider.name}: ${status} (${result.latencyMs}ms)`,
+    meta: {
+      ok: result.ok,
+      status,
+      latency_ms: result.latencyMs,
+      error: result.error,
+    },
+  });
+
+  if (!result.ok) {
+    return fail(`Provider is down: ${result.error}`);
+  }
+
+  return ok(
+    { status: status as "healthy" | "slow", latencyMs: result.latencyMs },
+    `${status === "healthy" ? "Healthy" : "Slow"} (${result.latencyMs}ms).`
+  );
 }
 
 // ============================================================

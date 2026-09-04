@@ -25,6 +25,7 @@ import {
   ArrowLeft,
   TrendingUp,
   Gift,
+  Activity,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -51,6 +52,7 @@ const adminNav = [
   { href: "/admin/pricing", label: "Pricing & Profit", icon: TrendingUp },
   { href: "/admin/categories", label: "Categories", icon: FolderTree },
   { href: "/admin/providers", label: "Providers", icon: Server },
+  { href: "/admin/provider-health", label: "Provider Health", icon: Activity },
   { href: "/admin/payments", label: "Payments", icon: Banknote },
   { href: "/admin/referrals", label: "Referrals", icon: Gift },
   { href: "/admin/transactions", label: "Transactions", icon: History },

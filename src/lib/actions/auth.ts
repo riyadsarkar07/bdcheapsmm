@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { signInSchema, signUpSchema, forgotPasswordSchema, resetPasswordSchema, refCodeSchema } from "@/lib/validations";
 import { fail, ok, isAdminProfile, type ActionResult } from "@/lib/guards";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
-import { writeLog } from "@/lib/audit";
+import { registerLoginSecurity, getSessionIdFromAccessToken } from "@/lib/session-security";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -50,11 +50,12 @@ export async function signInAction(input: {
   }
 
   const target = profile && isAdminProfile(profile) ? "/admin" : "/dashboard";
-  await writeLog({
+
+  await registerLoginSecurity({
     userId: data.user.id,
-    action: "login",
-    ip,
-    userAgent: headerStore.get("user-agent"),
+    accessToken: data.session?.access_token,
+    headers: headerStore,
+    logLogin: "always",
   });
 
   return ok({ redirect: target });
@@ -219,7 +220,19 @@ export async function resetPasswordAction(input: {
 export async function signOutAction(): Promise<void> {
   const { createClient } = await import("@/lib/supabase/server");
   const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
   await supabase.auth.signOut();
+
+  const sessionId = getSessionIdFromAccessToken(session?.access_token);
+  const userId = session?.user?.id;
+  if (sessionId && userId) {
+    const { createAdminClient } = await import("@/lib/supabase/admin");
+    const admin = createAdminClient();
+    await admin.from("user_sessions").delete().eq("user_id", userId).eq("auth_session_id", sessionId);
+  }
   redirect("/login");
 }
 
