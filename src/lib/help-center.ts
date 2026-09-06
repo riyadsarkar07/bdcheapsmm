@@ -1,9 +1,9 @@
 import type { HelpArticleCategory } from "@/lib/types/database";
 import {
   LOGIN_CYCLE_MAX_COINS,
-  LOGIN_CYCLE_MAX_USD,
   LOGIN_LADDER,
   COIN_USD_VALUE,
+  coinsToUsd,
 } from "@/lib/coins";
 import type { PaymentSettings, ReferralSettings } from "@/lib/types/app";
 
@@ -130,7 +130,7 @@ function interpolate(body: string, ctx: HelpContext): string {
     .replaceAll("{{referralRate}}", String(ctx.referralRate))
     .replaceAll("{{coinUsd}}", String(COIN_USD_VALUE))
     .replaceAll("{{cycleCoins}}", String(LOGIN_CYCLE_MAX_COINS))
-    .replaceAll("{{cycleUsd}}", LOGIN_CYCLE_MAX_USD.toFixed(2))
+    .replaceAll("{{cycleUsd}}", coinsToUsd(LOGIN_CYCLE_MAX_COINS).toFixed(2))
     .replaceAll("{{ladder}}", LOGIN_LADDER.join(", "));
 }
 
