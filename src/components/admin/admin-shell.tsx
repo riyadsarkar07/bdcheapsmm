@@ -27,6 +27,7 @@ import {
   TrendingUp,
   Gift,
   Activity,
+  CircleHelp,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -61,6 +62,7 @@ const adminNav = [
   { href: "/admin/coupons", label: "Coupons", icon: TicketPercent },
   { href: "/admin/announcements", label: "Announcements", icon: Megaphone },
   { href: "/admin/notices", label: "Notice Board", icon: ClipboardList },
+  { href: "/admin/help-center", label: "Help Center", icon: CircleHelp },
   { href: "/admin/logs", label: "Audit Logs", icon: ScrollText },
   { href: "/admin/api-keys", label: "API Keys", icon: Key },
   { href: "/admin/settings", label: "Settings", icon: Settings },

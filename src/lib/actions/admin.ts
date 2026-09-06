@@ -12,7 +12,9 @@ import {
   apiKeyCreateSchema,
   balanceAdjustSchema,
   noticeSchema,
+  helpArticleSchema,
 } from "@/lib/validations";
+import { revalidatePath } from "next/cache";
 import { fail, ok, requireAdmin, type ActionResult } from "@/lib/guards";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { providerApi, parseServiceType } from "@/lib/provider/smmfollow";
@@ -22,6 +24,11 @@ import { writeLog } from "@/lib/audit";
 import { createNotification, notifyAllAdmins } from "@/lib/notify";
 import { setSetting } from "@/lib/settings";
 import type { OrderStatus } from "@/lib/types/database";
+
+function revalidateHelpCenter() {
+  revalidatePath("/help-center");
+  revalidatePath("/admin/help-center");
+}
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
@@ -1101,4 +1108,155 @@ export async function toggleNoticePublishAction(id: string, isPublished: boolean
     description: `${isPublished ? "Published" : "Unpublished"} notice`,
   });
   return ok(undefined, isPublished ? "Notice published." : "Notice unpublished.");
+}
+
+export async function createHelpArticleAction(input: unknown): Promise<ActionResult> {
+  const { user, error } = await requireAdmin();
+  if (error || !user) return fail(error ?? "Not authenticated");
+  const parsed = helpArticleSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.errors[0]?.message ?? "Invalid article");
+
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { data, error: insertError } = await supabase
+    .from("help_articles")
+    .insert({
+      title: parsed.data.title,
+      slug: parsed.data.slug,
+      category: parsed.data.category,
+      excerpt: parsed.data.excerpt || null,
+      body: parsed.data.body,
+      sort_order: parsed.data.sortOrder,
+      is_published: parsed.data.isPublished,
+      is_popular: parsed.data.isPopular,
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
+  if (insertError) return fail(insertError.message);
+
+  await writeLog({
+    userId: user.id,
+    action: "create",
+    entityType: "help_articles",
+    entityId: data.id,
+    description: `Created help article ${parsed.data.title}`,
+  });
+  revalidateHelpCenter();
+  return ok(undefined, parsed.data.isPublished ? "Article published." : "Article saved as draft.");
+}
+
+export async function updateHelpArticleAction(id: string, input: unknown): Promise<ActionResult> {
+  const { user, error } = await requireAdmin();
+  if (error || !user) return fail(error ?? "Not authenticated");
+  const parsed = helpArticleSchema.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.errors[0]?.message ?? "Invalid article");
+
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { error: updateError } = await supabase
+    .from("help_articles")
+    .update({
+      title: parsed.data.title,
+      slug: parsed.data.slug,
+      category: parsed.data.category,
+      excerpt: parsed.data.excerpt || null,
+      body: parsed.data.body,
+      sort_order: parsed.data.sortOrder,
+      is_published: parsed.data.isPublished,
+      is_popular: parsed.data.isPopular,
+    })
+    .eq("id", id);
+  if (updateError) return fail(updateError.message);
+
+  await writeLog({
+    userId: user.id,
+    action: "update",
+    entityType: "help_articles",
+    entityId: id,
+    description: `Updated help article ${parsed.data.title}`,
+  });
+  revalidateHelpCenter();
+  return ok(undefined, "Article updated.");
+}
+
+export async function deleteHelpArticleAction(id: string): Promise<ActionResult> {
+  const { user, error } = await requireAdmin();
+  if (error || !user) return fail(error ?? "Not authenticated");
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { data: existing } = await supabase.from("help_articles").select("title").eq("id", id).maybeSingle();
+  const { error: delError } = await supabase.from("help_articles").delete().eq("id", id);
+  if (delError) return fail(delError.message);
+  await writeLog({
+    userId: user.id,
+    action: "delete",
+    entityType: "help_articles",
+    entityId: id,
+    description: `Deleted help article ${existing?.title ?? ""}`,
+  });
+  revalidateHelpCenter();
+  return ok(undefined, "Article deleted.");
+}
+
+export async function toggleHelpArticlePublishAction(id: string, isPublished: boolean): Promise<ActionResult> {
+  const { user, error } = await requireAdmin();
+  if (error || !user) return fail(error ?? "Not authenticated");
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { error: updateError } = await supabase
+    .from("help_articles")
+    .update({ is_published: isPublished })
+    .eq("id", id);
+  if (updateError) return fail(updateError.message);
+  await writeLog({
+    userId: user.id,
+    action: "update",
+    entityType: "help_articles",
+    entityId: id,
+    description: `${isPublished ? "Published" : "Unpublished"} help article`,
+  });
+  revalidateHelpCenter();
+  return ok(undefined, isPublished ? "Article published." : "Article unpublished.");
+}
+
+export async function seedHelpCatalogAction(): Promise<ActionResult<{ inserted: number }>> {
+  const { user, error } = await requireAdmin();
+  if (error || !user) return fail(error ?? "Not authenticated");
+
+  const { getHelpCatalog } = await import("@/lib/help-center");
+  const catalog = getHelpCatalog();
+  const { createClient } = await import("@/lib/supabase/server");
+  const supabase = await createClient();
+  const { data: existing, error: existingError } = await supabase.from("help_articles").select("slug");
+  if (existingError) return fail(existingError.message);
+
+  const have = new Set((existing ?? []).map((row) => row.slug));
+  const rows = catalog
+    .filter((article) => !have.has(article.slug))
+    .map((article) => ({
+      slug: article.slug,
+      category: article.category,
+      title: article.title,
+      excerpt: article.excerpt,
+      body: article.body,
+      sort_order: article.sortOrder,
+      is_published: true,
+      is_popular: article.isPopular,
+      created_by: user.id,
+    }));
+
+  if (rows.length === 0) return ok({ inserted: 0 }, "Default articles are already in the database.");
+
+  const { error: insertError } = await supabase.from("help_articles").insert(rows);
+  if (insertError) return fail(insertError.message);
+
+  await writeLog({
+    userId: user.id,
+    action: "create",
+    entityType: "help_articles",
+    description: `Seeded ${rows.length} help articles`,
+  });
+  revalidateHelpCenter();
+  return ok({ inserted: rows.length }, `Added ${rows.length} default articles.`);
 }

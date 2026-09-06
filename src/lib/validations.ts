@@ -275,3 +275,38 @@ export const orderGoalSchema = z.object({
 export const advisorQuerySchema = z.object({
   goal: z.string().min(3, "Describe your goal").max(400),
 });
+
+export const HELP_ARTICLE_CATEGORIES = [
+  "getting-started",
+  "ordering",
+  "payments",
+  "services",
+  "orders-safety",
+  "rewards",
+  "referrals",
+  "notices",
+  "advisor",
+  "security",
+  "support",
+  "troubleshooting",
+] as const;
+
+export const helpArticleSchema = z.object({
+  title: z.string().min(3, "Title is required").max(200),
+  slug: z
+    .string()
+    .min(3, "Slug is required")
+    .max(120)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Use lowercase letters, numbers and hyphens"),
+  category: z.enum(HELP_ARTICLE_CATEGORIES),
+  excerpt: z.string().max(300).optional().or(z.literal("")),
+  body: z.string().min(20, "Write a complete article").max(20000),
+  sortOrder: z.coerce.number().int().min(0).max(9999).default(0),
+  isPublished: z.boolean().default(true),
+  isPopular: z.boolean().default(false),
+});
+
+export const helpFeedbackSchema = z.object({
+  articleId: z.string().uuid(),
+  helpful: z.boolean(),
+});

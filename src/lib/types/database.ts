@@ -402,6 +402,45 @@ export type LoginReward = {
   created_at: string;
 };
 
+export type HelpArticleCategory =
+  | "getting-started"
+  | "ordering"
+  | "payments"
+  | "services"
+  | "orders-safety"
+  | "rewards"
+  | "referrals"
+  | "notices"
+  | "advisor"
+  | "security"
+  | "support"
+  | "troubleshooting";
+
+export type HelpArticle = {
+  id: string;
+  slug: string;
+  category: HelpArticleCategory;
+  title: string;
+  excerpt: string | null;
+  body: string;
+  sort_order: number;
+  is_published: boolean;
+  is_popular: boolean;
+  helpful_yes: number;
+  helpful_no: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type HelpArticleFeedback = {
+  article_id: string;
+  user_id: string;
+  helpful: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -763,6 +802,41 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "login_rewards_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      help_articles: {
+        Row: HelpArticle;
+        Insert: Partial<HelpArticle> & { slug: string; category: HelpArticleCategory; title: string; body: string };
+        Update: Partial<HelpArticle>;
+        Relationships: [
+          {
+            foreignKeyName: "help_articles_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      help_article_feedback: {
+        Row: HelpArticleFeedback;
+        Insert: Partial<HelpArticleFeedback> & { article_id: string; user_id: string; helpful: boolean };
+        Update: Partial<HelpArticleFeedback>;
+        Relationships: [
+          {
+            foreignKeyName: "help_article_feedback_article_id_fkey";
+            columns: ["article_id"];
+            isOneToOne: false;
+            referencedRelation: "help_articles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "help_article_feedback_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
             referencedRelation: "profiles";

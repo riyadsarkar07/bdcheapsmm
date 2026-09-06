@@ -21,6 +21,7 @@ import {
   Target,
   Gift,
   Lightbulb,
+  CircleHelp,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -52,6 +53,7 @@ const userNav = [
   { href: "/add-funds", label: "Add Funds", icon: ArrowDownToLine },
   { href: "/transactions", label: "Transactions", icon: History },
   { href: "/referrals", label: "Referrals", icon: Users },
+  { href: "/help-center", label: "Help Center", icon: CircleHelp },
   { href: "/support", label: "Support", icon: Headphones },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
