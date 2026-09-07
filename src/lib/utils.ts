@@ -36,10 +36,11 @@ export function formatNumber(value: number | string | null | undefined): string 
  * USD (the SMMFollowOM provider currency) regardless of the account's display
  * currency, so this is used for every service/order price shown anywhere.
  */
-export function formatUsd(amount: number | string | null | undefined): string {
+export function formatUsd(amount: number | string | null | undefined, maxFractionDigits = 2): string {
   const value = Number(amount ?? 0);
   if (Number.isNaN(value)) return "$0.00";
-  return "$" + value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const digits = Number.isFinite(maxFractionDigits) ? Math.max(2, Math.min(6, maxFractionDigits)) : 2;
+  return "$" + value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: digits });
 }
 
 export function formatDate(

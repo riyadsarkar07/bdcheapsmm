@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeOrderCharge, hasSufficientBalance, insufficientBalanceMessage, parseChargeError } from "@/lib/pricing";
+import { assertOrderPricingSafety } from "@/lib/pricing-safety";
 import { createHash } from "crypto";
 
 export const runtime = "nodejs";
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
 
   const { data: service } = await supabase
     .from("services")
-    .select("id, name, provider_id, provider_service_id, price, min_quantity, max_quantity, is_active")
+    .select("id, name, provider_id, provider_service_id, price, provider_price, min_quantity, max_quantity, is_active")
     .eq("provider_service_id", String(providerServiceId))
     .eq("is_active", true)
     .maybeSingle();
@@ -100,6 +101,19 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
+
+  const pricingCheck = await assertOrderPricingSafety({
+    provider,
+    providerServiceId: service.provider_service_id,
+    storedProviderPrice: service.provider_price,
+    quantity: qty,
+    sellingPrice: price,
+  });
+  if (!pricingCheck.ok) {
+    return NextResponse.json({ error: pricingCheck.message }, { status: 409 });
+  }
+  const providerCost = pricingCheck.providerCost;
+
   if (Number(profile.balance) <= 0 || !hasSufficientBalance(profile.balance, price)) {
     return NextResponse.json(
       { error: insufficientBalanceMessage(price, profile.balance) },
@@ -131,6 +145,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: orderError?.message ?? "Failed to create order" }, { status: 500 });
   }
 
+  await supabase.from("orders").update({ charge: providerCost }).eq("id", order.id);
+
   try {
     const { providerApi } = await import("@/lib/provider/smmfollow");
     const result = await providerApi.createOrder(provider, {
@@ -142,12 +158,14 @@ export async function POST(request: Request) {
       status: "processing",
       provider_order_id: String(result.order),
       provider_response: result as never,
+      charge: providerCost,
     }).eq("id", order.id);
     return NextResponse.json({
       order: orderNumber,
       id: order.id,
       provider_order_id: String(result.order),
       price,
+      cost: providerCost,
       status: "processing",
     });
   } catch (err) {
@@ -155,6 +173,7 @@ export async function POST(request: Request) {
       status: "failed",
       error_message: (err as Error).message,
       provider_response: { error: (err as Error).message } as never,
+      charge: providerCost,
     }).eq("id", order.id);
     return NextResponse.json(
       { error: (err as Error).message, order: orderNumber, id: order.id, status: "failed" },

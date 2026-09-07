@@ -23,6 +23,7 @@ import { slugify, formatUsd } from "@/lib/utils";
 import { writeLog } from "@/lib/audit";
 import { createNotification, notifyAllAdmins } from "@/lib/notify";
 import { setSetting } from "@/lib/settings";
+import { assertOrderPricingSafety } from "@/lib/pricing-safety";
 import type { OrderStatus } from "@/lib/types/database";
 
 function revalidateHelpCenter() {
@@ -895,7 +896,7 @@ export async function adminBulkRetryFailedOrdersAction(): Promise<ActionResult<{
   const supabase = await createClient();
   const { data: failedOrders } = await supabase
     .from("orders")
-    .select("id, provider_id, link, quantity, order_number, services(provider_service_id)")
+    .select("id, provider_id, link, quantity, price, order_number, services(provider_service_id, provider_price)")
     .in("status", ["failed", "rejected"]);
 
   let retried = 0;
@@ -903,6 +904,14 @@ export async function adminBulkRetryFailedOrdersAction(): Promise<ActionResult<{
     if (!order.provider_id || !order.services?.provider_service_id) continue;
     const { data: provider } = await supabase.from("providers").select("id, name, api_url, api_key").eq("id", order.provider_id).single();
     if (!provider) continue;
+    const pricingCheck = await assertOrderPricingSafety({
+      provider,
+      providerServiceId: order.services.provider_service_id,
+      storedProviderPrice: order.services.provider_price,
+      quantity: order.quantity,
+      sellingPrice: Number(order.price),
+    });
+    if (!pricingCheck.ok) continue;
     try {
       const result = await providerApi.createOrder(provider, {
         service: Number(order.services?.provider_service_id),
@@ -913,6 +922,7 @@ export async function adminBulkRetryFailedOrdersAction(): Promise<ActionResult<{
         status: "processing",
         provider_order_id: String(result.order),
         error_message: null,
+        charge: pricingCheck.providerCost,
       }).eq("id", order.id);
       retried++;
     } catch {

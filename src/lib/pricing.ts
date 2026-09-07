@@ -7,21 +7,80 @@
  *
  *   charge = round2(pricePer1000 * quantity / 1000)
  *
+ * Money math uses integer cents so floating-point rounding cannot hide a loss.
  * Everything that prices an order (frontend display, server-side charge,
  * balance deduction and admin reporting) must go through this module so the
  * math stays identical everywhere.
  */
 
+export function parseMoney(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = typeof value === "number" ? value : Number(String(value).trim());
+  if (!Number.isFinite(n)) return null;
+  return n;
+}
+
+export function parsePositiveMoney(value: unknown): number | null {
+  const n = parseMoney(value);
+  if (n == null || n <= 0) return null;
+  return n;
+}
+
+const MINOR_SCALE = 10_000;
+
+export function toMinor(value: number): number {
+  return Math.round(Number((Number(value) * MINOR_SCALE).toFixed(8)));
+}
+
+export function minorToUsd(minor: number): number {
+  return minor / MINOR_SCALE;
+}
+
+export function toCents(value: number): number {
+  return Math.round(Number((Number(value) * 100).toFixed(8)));
+}
+
+export function centsToUsd(cents: number): number {
+  return cents / 100;
+}
+
 export function round2(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return centsToUsd(toCents(n));
+}
+
+export function roundMoney(value: number, decimals = 4): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  const factor = 10 ** decimals;
+  return Math.round(Number((n * factor).toFixed(8))) / factor;
+}
+
+export function computeOrderChargeCents(pricePer1000: number, quantity: number): number | null {
+  const price = Number(pricePer1000);
+  const qty = Number(quantity);
+  if (!Number.isFinite(price) || !Number.isFinite(qty)) return null;
+  if (price <= 0 || qty <= 0) return null;
+  const cents = toCents((price * qty) / 1000);
+  if (!Number.isFinite(cents) || cents <= 0) return null;
+  return cents;
 }
 
 export function computeOrderCharge(pricePer1000: number, quantity: number): number {
+  const cents = computeOrderChargeCents(pricePer1000, quantity);
+  if (cents == null) return 0;
+  return centsToUsd(cents);
+}
+
+export function computeProviderCost(pricePer1000: number, quantity: number): number | null {
   const price = Number(pricePer1000);
   const qty = Number(quantity);
-  if (!Number.isFinite(price) || !Number.isFinite(qty)) return 0;
-  if (price <= 0 || qty <= 0) return 0;
-  return round2((price * qty) / 1000);
+  if (!Number.isFinite(price) || !Number.isFinite(qty)) return null;
+  if (price <= 0 || qty <= 0) return null;
+  const minor = toMinor((price * qty) / 1000);
+  if (!Number.isFinite(minor) || minor <= 0) return null;
+  return minorToUsd(minor);
 }
 
 export function formatChargeUsd(amount: number): string {

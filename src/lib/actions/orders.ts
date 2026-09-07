@@ -8,6 +8,7 @@ import { generateOrderNumber, formatUsd } from "@/lib/utils";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { providerApi } from "@/lib/provider/smmfollow";
 import { computeOrderCharge, hasSufficientBalance, insufficientBalanceMessage, parseChargeError, round2 } from "@/lib/pricing";
+import { assertOrderPricingSafety } from "@/lib/pricing-safety";
 import { writeLog } from "@/lib/audit";
 import { createNotification } from "@/lib/notify";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -107,7 +108,7 @@ async function placeOrder({
 
   const { data: service, error: serviceError } = await supabase
     .from("services")
-    .select("id, name, category_id, provider_id, provider_service_id, price, min_quantity, max_quantity, type, is_active")
+    .select("id, name, category_id, provider_id, provider_service_id, price, provider_price, min_quantity, max_quantity, type, is_active")
     .eq("id", serviceId)
     .maybeSingle();
 
@@ -160,6 +161,31 @@ async function placeOrder({
     price = round2(Math.max(price - couponDiscount, 0));
   }
 
+  let providerRecord: { id: string; name: string; api_url: string; api_key: string; status: string } | null = null;
+  try {
+    const admin = createAdminClient();
+    const { data: provider } = await admin
+      .from("providers")
+      .select("id, name, api_url, api_key, status")
+      .eq("id", service.provider_id)
+      .maybeSingle();
+    providerRecord = provider;
+  } catch {
+    providerRecord = null;
+  }
+
+  const pricingCheck = await assertOrderPricingSafety({
+    provider: providerRecord,
+    providerServiceId: service.provider_service_id,
+    storedProviderPrice: service.provider_price,
+    quantity: qty,
+    sellingPrice: price,
+  });
+  if (!pricingCheck.ok) {
+    return fail(pricingCheck.message);
+  }
+  const providerCost = pricingCheck.providerCost;
+
   const { data: liveProfile } = await supabase
     .from("profiles")
     .select("balance, currency, status")
@@ -198,6 +224,14 @@ async function placeOrder({
     return fail(orderError?.message ?? "Failed to create order. Please try again.");
   }
 
+  // Record actual provider cost immediately so admin profit never treats the
+  // orders.charge default of 0 as a $0.00 cost. This write happens before the
+  // provider is contacted and is retried with the service-role client.
+  const costWrite = await updateOrderVerified(supabase, order.id, { charge: providerCost });
+  if (!costWrite.ok) {
+    await updateOrderVerified(createAdminClient(), order.id, { charge: providerCost });
+  }
+
   // 2b. Record coupon usage so usage limits are enforced. Best-effort: a
   // bookkeeping failure here must not abort the order after the charge has
   // been applied, which would leave the order stuck in "pending".
@@ -222,46 +256,31 @@ async function placeOrder({
     }
   }
 
-  // 3. Submit to provider
-  // Provider credentials (api_url, api_key) are protected by RLS and only
-  // readable by admins via the user-scoped client, so read them with the
-  // service-role client. This block runs server-side only. Any failure in the
-  // lookup or the API call (including a missing service-role key) is recorded
-  // on the order instead of leaving it stuck in "pending" with no provider
-  // reference, and we never mark it submitted until the provider returns an id.
+  // 3. Submit to provider only after the pricing safety check passed and the
+  // wallet charge succeeded. Credentials are already loaded above.
   let providerOrderId: string | null = null;
   let providerResponse: unknown = null;
   let providerName: string | null = null;
   let status: OrderStatus = "processing";
 
   try {
-    const admin = createAdminClient();
-    const { data: provider, error: providerError } = await admin
-      .from("providers")
-      .select("id, name, api_url, api_key, status")
-      .eq("id", service.provider_id)
-      .single();
-
-    if (providerError) {
-      status = "failed";
-      providerResponse = { error: `Provider lookup failed: ${providerError.message}` };
-    } else if (!provider) {
+    if (!providerRecord) {
       status = "failed";
       providerResponse = { error: "Provider missing" };
-    } else if (provider.status !== "active") {
+    } else if (providerRecord.status !== "active") {
       status = "failed";
-      providerResponse = { error: `Provider "${provider.name}" is not active.` };
+      providerResponse = { error: `Provider "${providerRecord.name}" is not active.` };
     } else {
-      const result = await providerApi.createOrder(provider, {
+      const result = await providerApi.createOrder(providerRecord, {
         service: Number(service.provider_service_id),
         link,
         quantity: qty,
       });
       providerOrderId = String(result.order);
-      providerName = provider.name;
+      providerName = providerRecord.name;
       providerResponse = {
-        provider_id: provider.id,
-        provider_name: provider.name,
+        provider_id: providerRecord.id,
+        provider_name: providerRecord.name,
         provider_order_id: providerOrderId,
         ...result,
       };
@@ -283,6 +302,7 @@ async function placeOrder({
     provider_id: service.provider_id,
     provider_response: providerResponse as never,
     status,
+    charge: providerCost,
     error_message: status === "failed" ? String((providerResponse as { error?: string })?.error ?? "Unknown error") : null,
   };
   let updateError: { message: string } | null = null;
@@ -329,6 +349,7 @@ async function placeOrder({
     userAgent,
     meta: {
       price,
+      provider_cost: providerCost,
       provider_order_id: providerOrderId,
       provider_name: providerName,
       provider_submitted: status !== "failed",

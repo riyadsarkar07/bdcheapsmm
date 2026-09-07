@@ -53,7 +53,7 @@ function ProfitValue({ value }: { value: number | null }) {
   if (value == null) return <span className="text-muted-foreground">N/A</span>;
   return (
     <span className={value < 0 ? "text-destructive" : value > 0 ? "text-success" : "text-foreground"}>
-      {formatUsd(value)}
+      {formatUsd(value, 4)}
     </span>
   );
 }
@@ -287,23 +287,23 @@ export function OrderDetailClient({
           <CardContent>
             <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
-                <dt className="text-xs text-muted-foreground">Customer Price</dt>
+                <dt className="text-xs text-muted-foreground">User Price</dt>
                 <dd className="text-right text-sm font-medium">{formatUsd(profit.customerPrice)}</dd>
               </div>
               <div className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
                 <dt className="text-xs text-muted-foreground">Provider Cost</dt>
                 <dd className="text-right text-sm font-medium">
-                  {profit.providerCost == null ? <span className="text-muted-foreground">N/A</span> : formatUsd(profit.providerCost)}
+                  {profit.providerCost == null ? <span className="text-muted-foreground">N/A</span> : formatUsd(profit.providerCost, 4)}
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
-                <dt className="text-xs text-muted-foreground">Profit</dt>
+                <dt className="text-xs text-muted-foreground">Profit/Loss</dt>
                 <dd className="text-right text-sm font-medium">
                   <ProfitValue value={profit.profit} />
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
-                <dt className="text-xs text-muted-foreground">Profit %</dt>
+                <dt className="text-xs text-muted-foreground">Margin %</dt>
                 <dd className="text-right text-sm font-medium">
                   {profit.profitPercent == null ? (
                     <span className="text-muted-foreground">N/A</span>

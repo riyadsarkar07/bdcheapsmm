@@ -1,13 +1,15 @@
-import { computeOrderCharge, round2 } from "@/lib/pricing";
+import { computeProviderCost, minorToUsd, parsePositiveMoney, round2, toMinor } from "@/lib/pricing";
 
 /**
  * Profit breakdown for a single order. The customer price is always the amount
- * stored on the order (`orders.price`, what the user actually paid). The
- * provider/cost price comes from the order's stored charge if one exists,
- * otherwise it is derived from the service's `provider_price` (cost per 1000
- * units) using the same `computeOrderCharge` math used everywhere else in the
- * panel. When no provider cost is available the result carries `null` values so
- * callers can display "N/A" instead of guessing.
+ * stored on the order (`orders.price`, what the user actually paid).
+ *
+ * Provider cost uses the order's recorded `charge` only when it is a real
+ * positive amount. The column defaults to 0, so 0/null must be treated as
+ * unknown — never as a $0.00 cost that would fake 100% profit.
+ *
+ * When no recorded cost exists, cost is derived from the service's
+ * `provider_price` (per 1000). If that is also missing, profit is N/A.
  */
 
 export interface OrderProfit {
@@ -26,25 +28,23 @@ export function computeOrderProfit(
     return { customerPrice: 0, providerCost: null, profit: null, profitPercent: null };
   }
 
-  const storedCharge =
-    order.charge != null && Number.isFinite(Number(order.charge)) ? Number(order.charge) : null;
-  const providerPrice =
-    service?.provider_price != null && Number.isFinite(Number(service.provider_price))
-      ? Number(service.provider_price)
-      : null;
+  const recordedCost = parsePositiveMoney(order.charge);
+  const providerPrice = parsePositiveMoney(service?.provider_price);
 
   let providerCost: number | null = null;
-  if (storedCharge != null) {
-    providerCost = round2(storedCharge);
+  if (recordedCost != null) {
+    providerCost = recordedCost;
   } else if (providerPrice != null) {
-    providerCost = computeOrderCharge(providerPrice, order.quantity);
+    providerCost = computeProviderCost(providerPrice, order.quantity);
   }
 
   if (providerCost == null) {
     return { customerPrice, providerCost: null, profit: null, profitPercent: null };
   }
 
-  const profit = round2(customerPrice - providerCost);
-  const profitPercent = customerPrice > 0 ? round2((profit / customerPrice) * 100) : 0;
+  const profitMinor = toMinor(customerPrice) - toMinor(providerCost);
+  const profit = minorToUsd(profitMinor);
+  const sellMinor = toMinor(customerPrice);
+  const profitPercent = sellMinor > 0 ? round2((profitMinor / sellMinor) * 100) : null;
   return { customerPrice, providerCost, profit, profitPercent };
 }

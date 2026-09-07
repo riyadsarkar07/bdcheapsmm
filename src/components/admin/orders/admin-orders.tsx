@@ -215,10 +215,10 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">User</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Service</th>
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Qty</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Amount</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Cost</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Profit</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Profit %</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">User Price</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Provider Cost</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Profit/Loss</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Margin %</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
@@ -247,7 +247,7 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                         {order.profit.providerCost == null ? (
                           <span className="text-muted-foreground">N/A</span>
                         ) : (
-                          formatUsd(order.profit.providerCost)
+                          formatUsd(order.profit.providerCost, 4)
                         )}
                       </td>
                       <td className="px-4 py-3 text-right font-medium">
@@ -255,7 +255,7 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                           <span className="text-muted-foreground">N/A</span>
                         ) : (
                           <span className={order.profit.profit < 0 ? "text-destructive" : order.profit.profit > 0 ? "text-success" : undefined}>
-                            {formatUsd(order.profit.profit)}
+                            {formatUsd(order.profit.profit, 4)}
                           </span>
                         )}
                       </td>
