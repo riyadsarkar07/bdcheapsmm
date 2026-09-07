@@ -7,7 +7,7 @@ import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { generateOrderNumber, formatUsd } from "@/lib/utils";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { providerApi } from "@/lib/provider/smmfollow";
-import { computeOrderCharge, round2 } from "@/lib/pricing";
+import { computeOrderCharge, hasSufficientBalance, insufficientBalanceMessage, parseChargeError, round2 } from "@/lib/pricing";
 import { writeLog } from "@/lib/audit";
 import { createNotification } from "@/lib/notify";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -78,11 +78,12 @@ export async function createOrderAction(input: {
 /**
  * Shared order-creation path used by both the checkout form and the Retry
  * Order action. The input is already validated and the user is authenticated.
- * It loads the service, verifies active state/provider/qty/balance, inserts a
- * pending order, charges the user atomically, submits it to the provider and
- * persists the result. Retries deliberately reuse this path so a retried order
- * is created exactly like a fresh one: a new order_number, a new provider order
- * id, and the original (failed) order row is never modified.
+ * It loads the service, verifies active state/provider/qty/balance, then
+ * charges the wallet and inserts the order in one DB transaction via
+ * create_and_charge_order. The provider is called only after a successful
+ * charge. Retries reuse this path so a retried order is created exactly like
+ * a fresh one: a new order_number, a new provider order id, and the original
+ * (failed) order row is never modified.
  */
 async function placeOrder({
   user,
@@ -130,6 +131,9 @@ async function placeOrder({
   // `services.price` is the retail price per 1000 units (same as the provider
   // rate + markup), so the charge is (price/1000) x quantity - never price x quantity.
   let price = computeOrderCharge(service.price, qty);
+  if (!(price > 0)) {
+    return fail("This service cannot be ordered at this quantity because the calculated cost is $0.00.");
+  }
   let couponDiscount = 0;
 
   // Optional coupon
@@ -156,51 +160,42 @@ async function placeOrder({
     price = round2(Math.max(price - couponDiscount, 0));
   }
 
-  if (user.balance < price) {
-    return fail(
-      `Insufficient balance. You need ${price.toLocaleString()} ${user.currency} but have ${user.balance.toLocaleString()} ${user.currency}.`
-    );
+  const { data: liveProfile } = await supabase
+    .from("profiles")
+    .select("balance, currency, status")
+    .eq("id", user.id)
+    .maybeSingle();
+  const currentBalance = Number(liveProfile?.balance ?? user.balance ?? 0);
+  if (liveProfile?.status && liveProfile.status !== "active") {
+    return fail("Your account has been suspended.");
+  }
+  if (currentBalance <= 0 || (price > 0 && !hasSufficientBalance(currentBalance, price))) {
+    return fail(insufficientBalanceMessage(price, currentBalance));
   }
 
   const orderNumber = generateOrderNumber();
 
-  // 1. Create order (pending, not yet charged)
-  const { data: order, error: orderError } = await supabase
-    .from("orders")
-    .insert({
-      order_number: orderNumber,
-      user_id: user.id,
-      service_id: service.id,
-      provider_id: service.provider_id,
-      link,
-      quantity: qty,
-      price,
-      status: "pending",
-      currency: user.currency,
-    })
-    .select("*")
-    .single();
-
-  if (orderError || !order) {
-    return fail("Failed to create order. Please try again.");
-  }
-
-  // 2. Charge the user atomically
-  const { data: charged, error: chargeError } = await supabase.rpc("deduct_order_cost", {
-    p_order_id: order.id,
+  // Charge the wallet and insert the order in one DB transaction. If the
+  // locked profile cannot cover `price`, no order row is created.
+  const { data: order, error: orderError } = await supabase.rpc("create_and_charge_order", {
     p_user_id: user.id,
+    p_order_number: orderNumber,
+    p_service_id: service.id,
+    p_provider_id: service.provider_id,
+    p_link: link,
+    p_quantity: qty,
+    p_price: price,
+    p_currency: user.currency,
   });
 
-  if (chargeError || !charged) {
-    await supabase.from("orders").update({ status: "rejected", error_message: "Balance check failed." }).eq("id", order.id);
-    await createNotification({
-      userId: user.id,
-      type: "order_status",
-      title: "Order failed",
-      body: `Order #${orderNumber} could not be charged.`,
-      link: "/orders",
-    });
-    return fail("Insufficient balance at charge time. Order cancelled.");
+  if (orderError || !order) {
+    const parsed = parseChargeError(orderError?.message);
+    if (parsed.insufficient) {
+      return fail(
+        insufficientBalanceMessage(parsed.required ?? price, parsed.current ?? currentBalance)
+      );
+    }
+    return fail(orderError?.message ?? "Failed to create order. Please try again.");
   }
 
   // 2b. Record coupon usage so usage limits are enforced. Best-effort: a
@@ -217,7 +212,7 @@ async function placeOrder({
         await supabase.rpc("use_coupon", {
           p_user_id: user.id,
           p_coupon_id: couponRecord.id,
-          p_balance_after: user.balance - price,
+          p_balance_after: currentBalance - price,
           p_currency: user.currency,
           p_description: `Coupon discount applied (${coupon.trim()})`,
         });

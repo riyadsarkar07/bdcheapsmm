@@ -24,6 +24,42 @@ export function computeOrderCharge(pricePer1000: number, quantity: number): numb
   return round2((price * qty) / 1000);
 }
 
+export function formatChargeUsd(amount: number): string {
+  const value = Number(amount);
+  if (!Number.isFinite(value)) return "$0.00";
+  return (
+    "$" +
+    value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  );
+}
+
+export function insufficientBalanceMessage(required: number, current: number): string {
+  return `Insufficient balance. Please add funds to place this order. Required: ${formatChargeUsd(required)}. Current balance: ${formatChargeUsd(current)}.`;
+}
+
+export function parseChargeError(message: string | null | undefined): {
+  insufficient: boolean;
+  current?: number;
+  required?: number;
+} {
+  const text = message ?? "";
+  const tagged = text.match(/INSUFFICIENT_BALANCE:(-?\d+(?:\.\d+)?):(-?\d+(?:\.\d+)?)/i);
+  if (tagged) {
+    return { insufficient: true, current: Number(tagged[1]), required: Number(tagged[2]) };
+  }
+  if (/insufficient/i.test(text)) return { insufficient: true };
+  return { insufficient: false };
+}
+
+export function hasSufficientBalance(balance: number, charge: number): boolean {
+  const wallet = round2(Number(balance));
+  const cost = round2(Number(charge));
+  if (!Number.isFinite(wallet) || !Number.isFinite(cost)) return false;
+  if (wallet <= 0) return false;
+  if (!(cost > 0)) return false;
+  return wallet >= cost;
+}
+
 // ============================================================
 // Platform detection (categories -> platform)
 // ============================================================

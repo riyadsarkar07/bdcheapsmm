@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Loader2, ShoppingCart, Tag, Zap, AlertTriangle } from "lucide-react";
+import { Loader2, ShoppingCart, Tag, Zap, AlertTriangle, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,7 +21,7 @@ import {
 import { createOrderAction } from "@/lib/actions/orders";
 import { checkUrlConflictAction, type UrlConflict } from "@/lib/actions/url-check";
 import { formatUsd } from "@/lib/utils";
-import { computeOrderCharge } from "@/lib/pricing";
+import { computeOrderCharge, formatChargeUsd, hasSufficientBalance } from "@/lib/pricing";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -69,6 +69,7 @@ export function OrderForm({
   const router = useRouter();
   const queryClient = useQueryClient();
   const [loading, setLoading] = React.useState(false);
+  const submittingRef = React.useRef(false);
   const [couponStatus, setCouponStatus] = React.useState<
     "idle" | "applied" | "invalid"
   >("idle");
@@ -85,6 +86,15 @@ export function OrderForm({
   const total = computeOrderCharge(pricePerUnit, quantity);
 
   async function placeOrder(values: z.infer<typeof formSchema>) {
+    const cost = computeOrderCharge(pricePerUnit, values.quantity);
+    if (!hasSufficientBalance(balance, cost)) {
+      toast.error(
+        `Insufficient balance. Please add funds to place this order. Required: ${formatChargeUsd(cost)}. Current balance: ${formatChargeUsd(balance)}.`
+      );
+      return;
+    }
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setLoading(true);
     try {
       const result = await createOrderAction({
@@ -106,11 +116,20 @@ export function OrderForm({
         toast.error(result.error ?? "Failed to place order");
       }
     } finally {
+      submittingRef.current = false;
       setLoading(false);
     }
   }
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    const cost = computeOrderCharge(pricePerUnit, values.quantity);
+    if (!hasSufficientBalance(balance, cost)) {
+      toast.error(
+        `Insufficient balance. Please add funds to place this order. Required: ${formatChargeUsd(cost)}. Current balance: ${formatChargeUsd(balance)}.`
+      );
+      return;
+    }
+    if (submittingRef.current) return;
     setLoading(true);
     try {
       const check = await checkUrlConflictAction({ link: values.link, serviceId });
@@ -126,7 +145,7 @@ export function OrderForm({
     }
   }
 
-  const insufficient = total > balance;
+  const insufficient = !hasSufficientBalance(balance, total);
 
   return (
     <motion.div
@@ -235,15 +254,23 @@ export function OrderForm({
           </div>
 
           {insufficient ? (
-            <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
-              <span>
-                Insufficient balance.{" "}
-                <a href="/add-funds" className="font-semibold text-primary hover:underline">
-                  Add funds
-                </a>{" "}
-                to continue.
-              </span>
+            <div className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                <div className="space-y-1">
+                  <p className="font-semibold text-destructive">
+                    Insufficient balance. Please add funds to place this order.
+                  </p>
+                  <p className="text-muted-foreground">
+                    Required: {formatUsd(total)} · Current balance: {formatUsd(balance)}
+                  </p>
+                </div>
+              </div>
+              <Button asChild variant="gradient" size="sm" className="w-full">
+                <a href="/add-funds">
+                  <Wallet /> Add Funds
+                </a>
+              </Button>
             </div>
           ) : null}
 
@@ -284,7 +311,7 @@ export function OrderForm({
             </Button>
             <Button
               variant="gradient"
-              disabled={loading || !pendingValues}
+              disabled={loading || insufficient || !pendingValues}
               onClick={() => pendingValues && placeOrder(pendingValues)}
             >
               {loading ? <Loader2 className="animate-spin" /> : null}

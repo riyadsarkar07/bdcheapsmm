@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { computeOrderCharge } from "@/lib/pricing";
+import { computeOrderCharge, hasSufficientBalance, insufficientBalanceMessage, parseChargeError } from "@/lib/pricing";
 import { createHash } from "crypto";
 
 export const runtime = "nodejs";
@@ -94,42 +94,41 @@ export async function POST(request: Request) {
   if (!provider) return NextResponse.json({ error: "Provider not configured" }, { status: 500 });
 
   const price = computeOrderCharge(service.price, qty);
-  if (profile.balance < price) {
+  if (!(price > 0)) {
     return NextResponse.json(
-      { error: `Insufficient balance: need ${price}, have ${profile.balance}` },
+      { error: "This service cannot be ordered at this quantity because the calculated cost is $0.00." },
+      { status: 400 }
+    );
+  }
+  if (Number(profile.balance) <= 0 || !hasSufficientBalance(profile.balance, price)) {
+    return NextResponse.json(
+      { error: insufficientBalanceMessage(price, profile.balance) },
       { status: 402 }
     );
   }
 
   const orderNumber = `SMM${new Date().getFullYear().toString().slice(2)}${Math.floor(100000 + Math.random() * 900000)}`;
 
-  const { data: order, error: orderError } = await supabase
-    .from("orders")
-    .insert({
-      order_number: orderNumber,
-      user_id: profile.id,
-      service_id: service.id,
-      provider_id: service.provider_id,
-      link: String(link),
-      quantity: qty,
-      price,
-      status: "pending",
-      currency: profile.currency,
-    })
-    .select("*")
-    .single();
+  const { data: order, error: orderError } = await supabase.rpc("create_and_charge_order", {
+    p_user_id: profile.id,
+    p_order_number: orderNumber,
+    p_service_id: service.id,
+    p_provider_id: service.provider_id,
+    p_link: String(link),
+    p_quantity: qty,
+    p_price: price,
+    p_currency: profile.currency,
+  });
 
   if (orderError || !order) {
-    return NextResponse.json({ error: "Failed to create order" }, { status: 500 });
-  }
-
-  const { data: charged, error: chargeError } = await supabase.rpc("deduct_order_cost", {
-    p_order_id: order.id,
-    p_user_id: profile.id,
-  });
-  if (chargeError || !charged) {
-    await supabase.from("orders").update({ status: "rejected", error_message: "Balance check failed" }).eq("id", order.id);
-    return NextResponse.json({ error: "Insufficient balance" }, { status: 402 });
+    const parsed = parseChargeError(orderError?.message);
+    if (parsed.insufficient) {
+      return NextResponse.json(
+        { error: insufficientBalanceMessage(parsed.required ?? price, parsed.current ?? profile.balance) },
+        { status: 402 }
+      );
+    }
+    return NextResponse.json({ error: orderError?.message ?? "Failed to create order" }, { status: 500 });
   }
 
   try {

@@ -853,6 +853,19 @@ export type Database = {
       generate_referral_code: { Args: Record<never, never>; Returns: string };
       get_coupon: { Args: { p_code: string }; Returns: Coupon };
       deduct_order_cost: { Args: { p_order_id: string; p_user_id: string }; Returns: Order };
+      create_and_charge_order: {
+        Args: {
+          p_user_id: string;
+          p_order_number: string;
+          p_service_id: string;
+          p_provider_id: string;
+          p_link: string;
+          p_quantity: number;
+          p_price: number;
+          p_currency: string;
+        };
+        Returns: Order;
+      };
       create_ticket_with_message: {
         Args: {
           p_ticket_number: string;
