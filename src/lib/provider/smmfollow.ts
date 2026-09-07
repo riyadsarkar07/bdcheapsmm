@@ -1,7 +1,9 @@
 import type { Provider } from "@/lib/types/database";
+import { parsePositiveMoney } from "@/lib/pricing";
 
 export interface ProviderServiceItem {
   service: number;
+  service_id: string;
   name: string;
   category: string;
   rate: number;
@@ -61,11 +63,108 @@ const TIMEOUT_MS = 20_000;
 const PROVIDER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
+export function parseProviderRate(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") return parsePositiveMoney(value);
+  const normalized = String(value)
+    .trim()
+    .replace(/[$,]/g, "")
+    .replace(/\s+/g, "");
+  return parsePositiveMoney(normalized);
+}
+
+export function normalizeProviderServiceId(value: unknown): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return null;
+    return Number.isInteger(value) ? String(value) : String(Math.trunc(value));
+  }
+  const text = String(value).trim();
+  if (!text) return null;
+  if (/^\d+(\.0+)?$/.test(text)) return String(parseInt(text, 10));
+  return text;
+}
+
+function unwrapProviderCatalog(data: unknown, depth = 0): unknown[] {
+  if (Array.isArray(data)) return data;
+  if (!data || typeof data !== "object" || depth > 3) return [];
+  const record = data as Record<string, unknown>;
+  for (const key of ["services", "data", "result", "items", "list"]) {
+    const nested = record[key];
+    if (Array.isArray(nested)) return nested;
+  }
+  for (const key of ["services", "data", "result", "items", "list"]) {
+    const nested = record[key];
+    if (nested && typeof nested === "object") {
+      const deeper = unwrapProviderCatalog(nested, depth + 1);
+      if (deeper.length > 0) return deeper;
+    }
+  }
+  return [];
+}
+
+function firstValue(record: Record<string, unknown>, keys: string[]): unknown {
+  for (const key of keys) {
+    if (record[key] !== undefined && record[key] !== null && record[key] !== "") {
+      return record[key];
+    }
+  }
+  return undefined;
+}
+
+export function normalizeProviderServiceItem(raw: unknown): ProviderServiceItem | null {
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+  const serviceId = normalizeProviderServiceId(
+    firstValue(record, ["service", "service_id", "serviceId", "id", "ID"])
+  );
+  const rate = parseProviderRate(firstValue(record, ["rate", "price", "cost", "provider_price", "Rate"]));
+  if (!serviceId || rate == null) return null;
+  const numericId = Number(serviceId);
+  return {
+    service: Number.isFinite(numericId) ? numericId : 0,
+    service_id: serviceId,
+    name: String(firstValue(record, ["name", "service_name", "title"]) ?? ""),
+    category: String(firstValue(record, ["category", "category_name"]) ?? ""),
+    rate,
+    min: Number(firstValue(record, ["min", "min_quantity", "minimum"]) ?? 1),
+    max: Number(firstValue(record, ["max", "max_quantity", "maximum"]) ?? 100),
+    type: String(firstValue(record, ["type", "service_type"]) ?? ""),
+    average_time: String(firstValue(record, ["average_time", "average", "time"]) ?? ""),
+    description: firstValue(record, ["description", "desc"]) != null
+      ? String(firstValue(record, ["description", "desc"]))
+      : undefined,
+    refill: firstValue(record, ["refill"]) as boolean | string | undefined,
+    cancel: firstValue(record, ["cancel"]) as boolean | string | undefined,
+    driptype: firstValue(record, ["driptype", "drip_type"]) != null
+      ? String(firstValue(record, ["driptype", "drip_type"]))
+      : undefined,
+  };
+}
+
+export function normalizeProviderCatalog(data: unknown): ProviderServiceItem[] {
+  const rows = unwrapProviderCatalog(data);
+  const items: ProviderServiceItem[] = [];
+  for (const row of rows) {
+    const item = normalizeProviderServiceItem(row);
+    if (!item) continue;
+    items.push(item);
+  }
+  return items;
+}
+
+function asRecord(data: unknown): Record<string, unknown> {
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    return data as Record<string, unknown>;
+  }
+  return {};
+}
+
 async function post(
   provider: Pick<Provider, "api_url" | "api_key" | "name">,
   action: string,
   params: Record<string, unknown> = {}
-): Promise<Record<string, unknown>> {
+): Promise<unknown> {
   if (!provider.api_url) {
     throw new ProviderError("Provider API URL is not configured");
   }
@@ -118,16 +217,13 @@ async function post(
   }
 
   const text = await res.text();
-  let data: Record<string, unknown>;
   try {
-    data = JSON.parse(text);
+    return JSON.parse(text) as unknown;
   } catch {
     throw new ProviderError(
       `Invalid JSON response from ${provider.name}`
     );
   }
-
-  return data;
 }
 
 /** Extract a human-readable provider error message, if present. */
@@ -154,21 +250,24 @@ export const providerApi = {
     provider: Pick<Provider, "api_url" | "api_key" | "name">
   ): Promise<ProviderServiceItem[]> {
     const data = await post(provider, "services");
-    if (Array.isArray(data)) return data as ProviderServiceItem[];
-    if (Array.isArray(data.services)) return data.services as ProviderServiceItem[];
-    assertProviderFailed(data, "Failed to fetch services");
-    return [];
+    const items = normalizeProviderCatalog(data);
+    if (items.length > 0) return items;
+    const record = asRecord(data);
+    if (record.error || record.message) {
+      assertProviderFailed(record, "Failed to fetch services");
+    }
+    throw new ProviderError("Failed to fetch services");
   },
 
   async createOrder(
     provider: Pick<Provider, "api_url" | "api_key" | "name">,
     params: { service: number; link: string; quantity: number }
   ): Promise<ProviderOrderResult> {
-    const data = await post(provider, "add", {
+    const data = asRecord(await post(provider, "add", {
       service: params.service,
       link: params.link,
       quantity: params.quantity,
-    });
+    }));
     const order = Number(data.order);
     if (!order || Number.isNaN(order)) {
       assertProviderFailed(data, "Provider did not return an order id");
@@ -180,7 +279,7 @@ export const providerApi = {
     provider: Pick<Provider, "api_url" | "api_key" | "name">,
     providerOrderId: string | number
   ): Promise<ProviderStatusResult> {
-    const data = await post(provider, "status", { order: providerOrderId });
+    const data = asRecord(await post(provider, "status", { order: providerOrderId }));
     if (typeof data.status !== "string" || !data.status) {
       assertProviderFailed(data, "Status lookup failed");
     }
@@ -191,7 +290,7 @@ export const providerApi = {
     provider: Pick<Provider, "api_url" | "api_key" | "name">,
     providerOrderId: string | number
   ): Promise<{ refill: boolean; message?: string }> {
-    const data = await post(provider, "refill", { order: providerOrderId });
+    const data = asRecord(await post(provider, "refill", { order: providerOrderId }));
     if (data.refill === undefined) {
       assertProviderFailed(data, "Refill failed");
     }
@@ -202,8 +301,12 @@ export const providerApi = {
     provider: Pick<Provider, "api_url" | "api_key" | "name">,
     providerOrderId: string | number
   ): Promise<{ cancelled: boolean; message?: string }> {
-    const data = await post(provider, "cancel", { orders: providerOrderId });
-    if (!Array.isArray(data) && data.cancel === undefined && data.cancelled === undefined) {
+    const raw = await post(provider, "cancel", { orders: providerOrderId });
+    if (Array.isArray(raw)) {
+      return raw as unknown as { cancelled: boolean; message?: string };
+    }
+    const data = asRecord(raw);
+    if (data.cancel === undefined && data.cancelled === undefined) {
       assertProviderFailed(data, "Cancel failed");
     }
     return data as unknown as { cancelled: boolean; message?: string };
@@ -212,7 +315,7 @@ export const providerApi = {
   async getBalance(
     provider: Pick<Provider, "api_url" | "api_key" | "name">
   ): Promise<ProviderBalanceResult> {
-    const data = await post(provider, "balance");
+    const data = asRecord(await post(provider, "balance"));
     const balance = Number(data.balance);
     if (Number.isNaN(balance)) {
       assertProviderFailed(data, "Balance lookup failed");

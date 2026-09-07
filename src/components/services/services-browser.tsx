@@ -188,6 +188,8 @@ export function ServicesBrowser() {
       const { data } = await q;
       return (data ?? []) as ServiceRow[];
     },
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   // After a category is selected, smooth-scroll to the services section once its

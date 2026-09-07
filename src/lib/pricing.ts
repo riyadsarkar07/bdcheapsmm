@@ -57,6 +57,28 @@ export function roundMoney(value: number, decimals = 4): number {
   return Math.round(Number((n * factor).toFixed(8))) / factor;
 }
 
+export type PriceRounding = "round2" | "round" | "ceil";
+
+export function applyPriceRounding(value: number, rounding: PriceRounding = "round2"): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  if (rounding === "round") return Math.round(n);
+  if (rounding === "ceil") return Math.ceil(n);
+  return round2(n);
+}
+
+export function computeRetailPrice(
+  providerPrice: number,
+  marginPercent: number,
+  rounding: PriceRounding = "round2"
+): number {
+  const cost = Number(providerPrice);
+  const margin = Number(marginPercent);
+  if (!Number.isFinite(cost) || cost <= 0) return 0;
+  const pct = Number.isFinite(margin) ? margin : 0;
+  return applyPriceRounding(cost * (1 + pct / 100), rounding);
+}
+
 export function computeOrderChargeCents(pricePer1000: number, quantity: number): number | null {
   const price = Number(pricePer1000);
   const qty = Number(quantity);

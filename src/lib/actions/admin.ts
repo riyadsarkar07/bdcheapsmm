@@ -17,13 +17,14 @@ import {
 import { revalidatePath } from "next/cache";
 import { fail, ok, requireAdmin, type ActionResult } from "@/lib/guards";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
-import { providerApi, parseServiceType } from "@/lib/provider/smmfollow";
+import { providerApi, parseServiceType, parseProviderRate, normalizeProviderServiceId } from "@/lib/provider/smmfollow";
 import { probeProvider, recordProviderHealth, deriveHealth } from "@/lib/provider-health";
 import { slugify, formatUsd } from "@/lib/utils";
 import { writeLog } from "@/lib/audit";
 import { createNotification, notifyAllAdmins } from "@/lib/notify";
-import { setSetting } from "@/lib/settings";
+import { getSetting, setSetting } from "@/lib/settings";
 import { assertOrderPricingSafety } from "@/lib/pricing-safety";
+import { computeRetailPrice, round2, type PriceRounding } from "@/lib/pricing";
 import type { OrderStatus } from "@/lib/types/database";
 
 function revalidateHelpCenter() {
@@ -31,12 +32,11 @@ function revalidateHelpCenter() {
   revalidatePath("/admin/help-center");
 }
 
-function round2(value: number): number {
-  return Math.round(value * 100) / 100;
-}
-
-function computeRetailPrice(providerPrice: number, marginPercent: number): number {
-  return round2(providerPrice * (1 + marginPercent / 100));
+function revalidatePricingPaths() {
+  revalidatePath("/services", "layout");
+  revalidatePath("/admin/services");
+  revalidatePath("/admin/pricing");
+  revalidatePath("/admin/providers");
 }
 
 // ============================================================
@@ -233,7 +233,7 @@ export async function bulkPriceUpdateAction(input: {
     } else if (input.mode === "margin") {
       // Margin mode only applies to global-markup services; custom prices stay untouched.
       if (service.pricing_mode === "custom") continue;
-      if (service.provider_price == null) continue;
+      if (service.provider_price == null || service.provider_price <= 0) continue;
       const newPrice = computeRetailPrice(service.provider_price, input.value);
       await supabase.from("services").update({ price: newPrice, profit_margin: input.value }).eq("id", service.id);
       changed++;
@@ -263,13 +263,14 @@ export async function previewGlobalProfitAction(input: { profitPercentage: numbe
     .select("id, name, price, provider_price", { count: "exact", head: false })
     .eq("pricing_mode", "global")
     .not("provider_price", "is", null)
+    .gt("provider_price", 0)
     .order("name", { ascending: true })
     .limit(50);
 
   if (!services) return fail("Failed to load services.");
 
   const preview = services.map((s) => {
-    const newPrice = applyRounding(computeRetailPrice(s.provider_price!, input.profitPercentage), input.rounding);
+    const newPrice = computeRetailPrice(s.provider_price!, input.profitPercentage, input.rounding);
     return { id: s.id, name: s.name, price: s.price, newPrice, providerPrice: s.provider_price! };
   });
 
@@ -302,6 +303,8 @@ export async function applyGlobalProfitAction(input: { profitPercentage: number;
     rounding: input.rounding,
   });
 
+  revalidatePricingPaths();
+
   await writeLog({
     userId: user.id,
     action: "update",
@@ -309,12 +312,6 @@ export async function applyGlobalProfitAction(input: { profitPercentage: number;
     description: `Applied global profit ${input.profitPercentage}% (${input.rounding}) to ${updated} global-markup services`,
   });
   return ok({ updated }, `Applied global profit to ${updated} services.`);
-}
-
-function applyRounding(value: number, rounding: "round2" | "round" | "ceil"): number {
-  if (rounding === "round") return Math.round(value);
-  if (rounding === "ceil") return Math.ceil(value);
-  return round2(value);
 }
 
 // ============================================================
@@ -398,25 +395,54 @@ export async function syncProviderServicesAction(providerId: string): Promise<Ac
 
   try {
     const items = await providerApi.getServices(provider);
+    const pricing = await getSetting<{ global_profit_percentage?: number; rounding?: PriceRounding }>("pricing");
+    const globalProfit = Number(pricing?.global_profit_percentage);
+    const rounding: PriceRounding =
+      pricing?.rounding === "round" || pricing?.rounding === "ceil" || pricing?.rounding === "round2"
+        ? pricing.rounding
+        : "round2";
+    const defaultMargin = Number.isFinite(globalProfit) ? globalProfit : 20;
 
     // Build the payload once; the insert/update of every service happens inside
     // the `sync_provider_services` RPC (one DB round-trip) so syncing ~1.7k
     // services finishes well within the serverless function limit.
-    const payload = items.map((item) => ({
-      service: String(item.service),
-      name: item.name,
-      category: item.category,
-      category_slug: slugify(item.category),
-      rate: Number(item.rate),
-      min: Number(item.min),
-      max: Number(item.max),
-      average_time: item.average_time ?? null,
-      type: parseServiceType(item.type + " " + item.name),
-      description: item.description ?? null,
-      refill: item.refill ?? null,
-      cancel: item.cancel ?? null,
-      driptype: item.driptype ?? null,
-    }));
+    const payload: Array<{ service: string; rate?: number; [key: string]: unknown }> = [];
+    for (const item of items) {
+      const serviceId = item.service_id || normalizeProviderServiceId(item.service);
+      if (!serviceId) continue;
+      const rate = parseProviderRate(item.rate);
+      if (rate == null) {
+        payload.push({ service: serviceId });
+        continue;
+      }
+      payload.push({
+        service: serviceId,
+        name: item.name,
+        category: item.category,
+        category_slug: slugify(item.category || "general") || "general",
+        rate,
+        min: Number(item.min),
+        max: Number(item.max),
+        average_time: item.average_time ?? null,
+        type: parseServiceType(`${item.type ?? ""} ${item.name ?? ""}`),
+        description: item.description ?? null,
+        refill: item.refill ?? null,
+        cancel: item.cancel ?? null,
+        driptype: item.driptype ?? null,
+        profit_margin: defaultMargin,
+        price: computeRetailPrice(rate, defaultMargin, rounding),
+        rounding,
+      });
+    }
+
+    const storedCount = payload.filter((item) => parseProviderRate(item.rate) != null).length;
+    if (storedCount === 0) {
+      await supabase.from("providers").update({
+        sync_status: "error",
+        sync_message: "Provider returned no services with a valid rate.",
+      }).eq("id", providerId);
+      return fail("Provider returned no services with a valid rate.");
+    }
 
     const { data, error: rpcError } = await supabase.rpc("sync_provider_services", {
       p_provider_id: providerId,
@@ -442,15 +468,17 @@ export async function syncProviderServicesAction(providerId: string): Promise<Ac
       })
       .eq("id", providerId);
 
+    revalidatePricingPaths();
+
     await writeLog({
       userId: user.id,
       action: "provider_sync",
       entityType: "providers",
       entityId: provider.id,
       description: `Synced provider ${provider.name}: ${imported} imported, ${updated} updated`,
-      meta: { imported, updated, total: items.length },
+      meta: { imported, updated, total: items.length, stored: payload.length },
     });
-    return ok({ imported, updated }, `Synced: ${imported} new, ${updated} updated (${items.length} total).`);
+    return ok({ imported, updated }, `Synced: ${imported} new, ${updated} updated (${storedCount} with valid rates).`);
   } catch (err) {
     await supabase.from("providers").update({ sync_status: "error", sync_message: (err as Error).message }).eq("id", providerId);
     return fail((err as Error).message);

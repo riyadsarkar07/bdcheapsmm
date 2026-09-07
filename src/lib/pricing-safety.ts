@@ -1,4 +1,4 @@
-import { providerApi } from "@/lib/provider/smmfollow";
+import { normalizeProviderServiceId, parseProviderRate, providerApi } from "@/lib/provider/smmfollow";
 import {
   computeProviderCost,
   minorToUsd,
@@ -69,9 +69,11 @@ async function loadLiveRates(
     const items = await providerApi.getServices(provider);
     const rates = new Map<string, number>();
     for (const item of items) {
-      const rate = parsePositiveMoney(item.rate);
-      if (rate != null) rates.set(String(item.service), rate);
+      const rate = parseProviderRate(item.rate);
+      const serviceId = item.service_id || normalizeProviderServiceId(item.service);
+      if (rate != null && serviceId) rates.set(serviceId, rate);
     }
+    if (rates.size === 0) return null;
     liveCatalogCache.set(key, { at: Date.now(), rates });
     return rates;
   } catch {
@@ -86,11 +88,13 @@ export async function resolveCurrentProviderRate(input: {
 }): Promise<{ rate: number; source: "live" | "stored" } | null> {
   const stored = parsePositiveMoney(input.storedProviderPrice);
 
-  if (input.provider && input.providerServiceId != null && String(input.providerServiceId).length > 0) {
+  const serviceId = normalizeProviderServiceId(input.providerServiceId);
+  if (input.provider && serviceId) {
     const rates = await loadLiveRates(input.provider);
     if (rates) {
-      const live = rates.get(String(input.providerServiceId)) ?? null;
+      const live = rates.get(serviceId) ?? null;
       if (live != null) return { rate: live, source: "live" };
+      return null;
     }
   }
 

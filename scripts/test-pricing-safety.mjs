@@ -37,6 +37,22 @@ function round2(value) {
   return centsToUsd(toCents(n));
 }
 
+function applyPriceRounding(value, rounding = "round2") {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  if (rounding === "round") return Math.round(n);
+  if (rounding === "ceil") return Math.ceil(n);
+  return round2(n);
+}
+
+function computeRetailPrice(providerPrice, marginPercent, rounding = "round2") {
+  const cost = Number(providerPrice);
+  const margin = Number(marginPercent);
+  if (!Number.isFinite(cost) || cost <= 0) return 0;
+  const pct = Number.isFinite(margin) ? margin : 0;
+  return applyPriceRounding(cost * (1 + pct / 100), rounding);
+}
+
 function computeOrderCharge(pricePer1000, quantity) {
   const price = Number(pricePer1000);
   const qty = Number(quantity);
@@ -142,5 +158,25 @@ assert.equal(recordedProfit.profitPercent, 20);
 const fallbackFromService = computeOrderProfit({ price: 0.24, quantity: qty, charge: 0 }, { provider_price: 1.76 });
 assert.equal(fallbackFromService.providerCost, 0.528);
 assert.equal(fallbackFromService.profit, -0.288);
+
+const service6005Provider = 1.17;
+const service6005Sell = computeRetailPrice(service6005Provider, 15, "round2");
+assert.equal(service6005Sell, 1.35);
+
+const loss6005 = evaluatePricingSafety(computeOrderCharge(0.49, 1000), computeProviderCost(1.17, 1000));
+assert.equal(loss6005.ok, false);
+assert.equal(loss6005.reason, "underpriced");
+
+const profit6005 = evaluatePricingSafety(computeOrderCharge(1.35, 1000), computeProviderCost(1.17, 1000));
+assert.equal(profit6005.ok, true);
+assert.equal(profit6005.providerCost, 1.17);
+
+assert.equal(evaluatePricingSafety(1.35, null).ok, false);
+assert.equal(evaluatePricingSafety(1.35, 0).ok, false);
+
+const recorded6005 = computeOrderProfit({ price: 1.35, quantity: 1000, charge: 1.17 }, { provider_price: 1.17 });
+assert.equal(recorded6005.providerCost, 1.17);
+assert.equal(recorded6005.profit, 0.18);
+assert.equal(recorded6005.profitPercent, 13.33);
 
 console.log("pricing safety tests passed");

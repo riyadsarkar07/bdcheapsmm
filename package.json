@@ -9,6 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "test:pricing": "node scripts/test-pricing-safety.mjs",
+    "test:provider-sync": "node scripts/test-provider-sync.mjs",
     "db:push": "supabase db push",
     "db:reset": "supabase db reset",
     "postinstall": "node scripts/postinstall.js"
