@@ -19,7 +19,11 @@ export default async function AdminLogsPage() {
   if (queryError) {
     return (
       <div>
-        <PageHeader title="Audit Logs" description="Every administrative and user action, logged for review." />
+        <PageHeader
+          eyebrow="Admin"
+          title="Audit Logs"
+          description="Every administrative and user action, logged for review."
+        />
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
           Failed to load audit logs: {queryError.message}
         </div>
@@ -30,6 +34,7 @@ export default async function AdminLogsPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Admin"
         title="Audit Logs"
         description="Every administrative and user action, logged for review."
       />

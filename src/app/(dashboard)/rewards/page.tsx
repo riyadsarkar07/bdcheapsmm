@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/guards";
 import { PageHeader } from "@/components/page-header";
 import { DailyLogin } from "@/components/rewards/daily-login";
+import { Gift } from "lucide-react";
 
 export const revalidate = 0;
 
@@ -34,8 +35,10 @@ export default async function RewardsPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Rewards"
         title="Daily Login Reward"
         description="Earn Coins for logging in. A full 30-day cycle is 150 Coins ($0.15). 1 Coin = $0.001."
+        icon={<Gift />}
       />
       <DailyLogin
         streak={streak}

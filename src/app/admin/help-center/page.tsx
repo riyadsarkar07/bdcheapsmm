@@ -21,6 +21,7 @@ export default async function AdminHelpCenterPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Admin"
         title="Help Center"
         description="Create, edit, publish and organize user documentation. Seed default A-Z articles if the table is empty."
       />

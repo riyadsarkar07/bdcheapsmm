@@ -113,6 +113,7 @@ export default async function AdminReferralsPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Admin"
         title="Referrals"
         description="View referred users, deposits and commissions, and configure the commission rate."
       />

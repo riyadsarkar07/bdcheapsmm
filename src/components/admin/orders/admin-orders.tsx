@@ -207,7 +207,8 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
               <EmptyState title="No orders found" />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto lg:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
@@ -358,6 +359,52 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                 </tbody>
               </table>
             </div>
+            <ul className="divide-y lg:hidden">
+              {filtered.map((order) => (
+                <li key={order.id} className="p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <Link href={`/orders/${order.id}`} className="text-sm font-semibold text-primary hover:underline">
+                      #{order.order_number}
+                    </Link>
+                    <OrderStatusBadge status={order.status} />
+                  </div>
+                  <p className="mt-1 line-clamp-1 text-sm">{truncate(order.services?.name ?? "—", 48)}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {order.profiles?.full_name ?? order.profiles?.email ?? "—"}
+                  </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    <span>Qty <span className="font-medium text-foreground tabular-nums">{order.quantity.toLocaleString()}</span></span>
+                    <span>Price <span className="font-medium text-foreground tabular-nums">{formatUsd(order.price)}</span></span>
+                    <span className={order.profit.profit == null ? "" : order.profit.profit < 0 ? "text-destructive" : "text-success"}>
+                      P/L {order.profit.profit == null ? "N/A" : formatUsd(order.profit.profit, 4)}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Select value={order.status} onValueChange={(v) => setStatus(order, v as OrderStatus)}>
+                      <SelectTrigger className="h-8 w-36 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statusOptions.map((s) => (
+                          <SelectItem key={s} value={s}>{s.replace("_", " ")}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {canCancel(order.status) ? (
+                      <Button variant="outline" size="sm" className="text-destructive" onClick={() => runOrderAction(order, "Cancel", () => cancelOrderAction(order.id))} disabled={actionLoading === order.id + "Cancel"}>
+                        {actionLoading === order.id + "Cancel" ? <Loader2 className="animate-spin" /> : <XCircle />} Cancel
+                      </Button>
+                    ) : null}
+                    {order.status !== "refunded" ? (
+                      <Button variant="outline" size="sm" className="text-success" onClick={() => refund(order)} disabled={actionLoading === order.id + "refund"}>
+                        {actionLoading === order.id + "refund" ? <Loader2 className="animate-spin" /> : <Undo2 />} Refund
+                      </Button>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            </>
           )}
         </CardContent>
       </Card>

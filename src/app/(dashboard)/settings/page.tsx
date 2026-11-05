@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/guards";
+import { Settings } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/page-header";
 import { ProfileSettings } from "@/components/settings/profile-settings";
@@ -48,8 +49,10 @@ export default async function SettingsPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Account"
         title="Profile Settings"
         description="Update your personal information and manage account security."
+        icon={<Settings />}
       />
       <div className="grid gap-6">
         <ProfileSettings user={user} />

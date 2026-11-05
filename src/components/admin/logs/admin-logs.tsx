@@ -59,7 +59,8 @@ export function AdminLogs({ logs }: { logs: LogRow[] }) {
               <EmptyState title="No logs found" />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
@@ -96,6 +97,23 @@ export function AdminLogs({ logs }: { logs: LogRow[] }) {
                 </tbody>
               </table>
             </div>
+            <ul className="divide-y md:hidden">
+              {filtered.map((log) => (
+                <li key={log.id} className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <Badge variant="secondary">{log.action.replace("_", " ")}</Badge>
+                    <span className="shrink-0 text-xs text-muted-foreground">{formatDateTime(log.created_at, "MMM d, h:mm a")}</span>
+                  </div>
+                  <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{log.description ?? "—"}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span className="truncate">{log.profiles?.full_name ?? log.profiles?.email ?? "System"}</span>
+                    {log.entity_type ? <span className="truncate font-mono">{log.entity_type}{log.entity_id ? `:${log.entity_id}` : ""}</span> : null}
+                    {log.ip ? <span className="font-mono">{log.ip}</span> : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            </>
           )}
         </CardContent>
       </Card>

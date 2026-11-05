@@ -18,6 +18,7 @@ export default async function AdminUsersPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Admin"
         title="Users"
         description="Manage all registered users."
       />

@@ -23,6 +23,7 @@ export default async function AdminCategoriesPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Admin"
         title="Categories"
         description="Organize your services into categories."
       />

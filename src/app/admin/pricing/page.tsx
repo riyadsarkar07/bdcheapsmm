@@ -21,6 +21,7 @@ export default async function AdminPricingPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Admin"
         title="Pricing & Profit"
         description="Set the global profit percentage. Custom-price services are never changed."
       />

@@ -83,7 +83,8 @@ export function AdminCategories({
               <EmptyState title="No categories yet" />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
@@ -154,6 +155,44 @@ export function AdminCategories({
                 </tbody>
               </table>
             </div>
+            <ul className="divide-y md:hidden">
+              {categories.map((category) => (
+                <li key={category.id} className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg gradient-bg text-white">
+                      <CategoryIcon icon={category.icon} className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{category.name}</p>
+                      {category.description ? <p className="truncate text-xs text-muted-foreground">{category.description}</p> : null}
+                    </div>
+                    <Badge variant={category.is_active ? "success" : "destructive"}>{category.is_active ? "Active" : "Hidden"}</Badge>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Badge variant="subtle">{serviceCounts[category.id] ?? 0} services</Badge>
+                      <span className="font-mono">{category.slug}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="iconSm" onClick={() => setEditing(category)} aria-label="Edit category">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="iconSm" className="text-destructive hover:text-destructive" onClick={async () => {
+                        if (!confirm(`Delete category "${category.name}"? Services will lose their category.`)) return;
+                        setLoading(true);
+                        try {
+                          const result = await deleteCategoryAction(category.id);
+                          if (result.success) { toast.success("Category deleted"); router.refresh(); } else { toast.error(result.error ?? "Failed"); }
+                        } finally { setLoading(false); }
+                      }} aria-label="Delete category">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            </>
           )}
         </CardContent>
       </Card>

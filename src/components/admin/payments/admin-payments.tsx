@@ -174,7 +174,8 @@ export function AdminPayments({ payments }: { payments: PaymentRow[] }) {
               <EmptyState title="No payment requests found" />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
@@ -257,6 +258,47 @@ export function AdminPayments({ payments }: { payments: PaymentRow[] }) {
                 </tbody>
               </table>
             </div>
+            <ul className="divide-y md:hidden">
+              {filtered.map((payment) => (
+                <li key={payment.id} className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{payment.profiles?.full_name ?? "User"}</p>
+                      <p className="truncate text-xs text-muted-foreground">{payment.profiles?.email}</p>
+                    </div>
+                    <PaymentStatusBadge status={payment.status} />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Badge variant="secondary">{payment.method}</Badge>
+                      <span className="font-mono">{payment.transaction_id}</span>
+                    </div>
+                    <span className="text-sm font-semibold text-primary tabular-nums">
+                      {formatCurrency(payment.amount, payment.currency)}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">{formatDateTime(payment.created_at, "MMM d, h:mm a")}</span>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="iconSm" onClick={() => setViewing(payment)} aria-label="View payment">
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                      {payment.status === "pending" ? (
+                        <>
+                          <Button variant="ghost" size="iconSm" className="text-success hover:text-success" onClick={() => approve(payment)} disabled={loading === payment.id} aria-label="Approve">
+                            {loading === payment.id ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
+                          </Button>
+                          <Button variant="ghost" size="iconSm" className="text-destructive hover:text-destructive" onClick={() => setRejecting(payment)} disabled={loading === payment.id} aria-label="Reject">
+                            <XCircle />
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            </>
           )}
         </CardContent>
       </Card>

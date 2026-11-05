@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/guards";
 import { PageHeader } from "@/components/page-header";
 import { GoalTracker, type GoalCard } from "@/components/goals/goal-tracker";
+import { Target } from "lucide-react";
 
 export const revalidate = 0;
 
@@ -65,8 +66,10 @@ export default async function GoalsPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Growth"
         title="Order Goal Tracker"
         description="Set follower, view or like targets and track progress from your existing orders."
+        icon={<Target />}
       />
       <GoalTracker goals={cards} services={services ?? []} />
     </div>

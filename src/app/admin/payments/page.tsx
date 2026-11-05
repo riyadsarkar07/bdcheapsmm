@@ -19,7 +19,11 @@ export default async function AdminPaymentsPage() {
   if (queryError) {
     return (
       <div>
-        <PageHeader title="Payment Requests" description="Approve or reject deposit requests." />
+        <PageHeader
+          eyebrow="Admin"
+          title="Payment Requests"
+          description="Approve or reject deposit requests."
+        />
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
           Failed to load payment requests: {queryError.message}
         </div>
@@ -46,6 +50,7 @@ export default async function AdminPaymentsPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Admin"
         title="Payment Requests"
         description="Approve or reject deposit requests. Approval credits the user's balance instantly."
       />

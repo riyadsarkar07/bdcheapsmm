@@ -23,6 +23,7 @@ export default async function AdminProvidersPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Admin"
         title="Providers"
         description="Connect unlimited SMM API providers. Credentials stay server-side."
       />

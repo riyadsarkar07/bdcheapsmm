@@ -18,6 +18,7 @@ export default async function AdminCouponsPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Admin"
         title="Coupons"
         description="Create discount codes for deposits and orders. Codes are case-insensitive."
       />

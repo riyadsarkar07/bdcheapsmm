@@ -59,7 +59,8 @@ export function AdminNotices({ notices }: { notices: Notice[] }) {
               <EmptyState title="No notices yet" description="Create a notice for the user notice board." />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
@@ -136,6 +137,46 @@ export function AdminNotices({ notices }: { notices: Notice[] }) {
                 </tbody>
               </table>
             </div>
+            <ul className="divide-y md:hidden">
+              {notices.map((notice) => (
+                <li key={notice.id} className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{notice.title}</p>
+                      {notice.body ? <p className="line-clamp-1 text-xs text-muted-foreground">{notice.body}</p> : null}
+                    </div>
+                    <Badge variant={notice.is_published ? "success" : "subtle"}>
+                      {notice.is_published ? "Published" : "Draft"}
+                    </Badge>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Badge variant="secondary">{categoryLabel[notice.category]}</Badge>
+                      <span>{formatDateTime(notice.updated_at, "MMM d, h:mm a")}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="iconSm" onClick={async () => {
+                        const result = await toggleNoticePublishAction(notice.id, !notice.is_published);
+                        if (result.success) { toast.success(result.message ?? "Updated"); router.refresh(); } else { toast.error(result.error ?? "Failed"); }
+                      }} aria-label={notice.is_published ? "Unpublish" : "Publish"}>
+                        {notice.is_published ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button variant="ghost" size="iconSm" onClick={() => setEditing(notice)} aria-label="Edit notice">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="iconSm" className="text-destructive hover:text-destructive" onClick={async () => {
+                        if (!confirm(`Delete notice "${notice.title}"?`)) return;
+                        const result = await deleteNoticeAction(notice.id);
+                        if (result.success) { toast.success("Notice deleted"); router.refresh(); } else { toast.error(result.error ?? "Failed"); }
+                      }} aria-label="Delete notice">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            </>
           )}
         </CardContent>
       </Card>

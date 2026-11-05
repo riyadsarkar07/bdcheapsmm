@@ -19,7 +19,11 @@ export default async function AdminTransactionsPage() {
   if (queryError) {
     return (
       <div>
-        <PageHeader title="Transactions" description="Every balance movement across all users." />
+        <PageHeader
+          eyebrow="Admin"
+          title="Transactions"
+          description="Every balance movement across all users."
+        />
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
           Failed to load transactions: {queryError.message}
         </div>
@@ -30,6 +34,7 @@ export default async function AdminTransactionsPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Admin"
         title="Transactions"
         description="Every balance movement across all users — deposits, order charges, refunds and adjustments."
       />

@@ -128,6 +128,7 @@ export default async function ServiceOrderPage({
             linkPlaceholder={exampleLinkForPlatform(
               detectPlatform(service.categories?.name, service.categories?.slug)
             )}
+            averageTime={service.average_time}
           />
         </div>
       </div>

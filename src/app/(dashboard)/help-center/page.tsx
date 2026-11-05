@@ -6,6 +6,7 @@ import { HelpCenter } from "@/components/help/help-center";
 import { buildHelpContext, mergeHelpArticles } from "@/lib/help-center";
 import type { HelpArticleCategory } from "@/lib/types/database";
 import type { ReferralSettings } from "@/lib/types/app";
+import { CircleHelp } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -48,8 +49,10 @@ export default async function HelpCenterPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Help"
         title="Help Center"
         description={`Search A-Z guides for ${settings.site.name}. Articles use live payment methods and referral settings.`}
+        icon={<CircleHelp />}
       />
       <HelpCenter articles={articles} votes={votes} />
     </div>

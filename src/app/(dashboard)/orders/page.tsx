@@ -4,8 +4,7 @@ import { requireUser } from "@/lib/guards";
 import { PageHeader } from "@/components/page-header";
 import { OrdersList } from "@/components/orders/orders-list";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus } from "lucide-react";
+import { Plus, ShoppingCart } from "lucide-react";
 import type { OrderStatus } from "@/lib/types/database";
 
 export const revalidate = 0;
@@ -36,8 +35,10 @@ export default async function OrdersPage({
   return (
     <div>
       <PageHeader
+        eyebrow="Orders"
         title="My Orders"
         description="Track and manage all your orders."
+        icon={<ShoppingCart />}
       >
         <Button asChild variant="gradient">
           <Link href="/services">
@@ -45,23 +46,6 @@ export default async function OrdersPage({
           </Link>
         </Button>
       </PageHeader>
-
-      <Tabs defaultValue={status ?? "all"} className="mb-5">
-        <TabsList className="flex-wrap h-auto">
-          {[
-            { key: "all", label: "All" },
-            { key: "pending", label: "Pending" },
-            { key: "processing", label: "Processing" },
-            { key: "in_progress", label: "In Progress" },
-            { key: "completed", label: "Completed" },
-            { key: "cancelled", label: "Cancelled" },
-          ].map((tab) => (
-            <TabsTrigger key={tab.key} value={tab.key} asChild>
-              <Link href={`/orders?status=${tab.key}`}>{tab.label}</Link>
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
 
       <OrdersList initialOrders={orders ?? []} userId={user.id} statusFilter={status} />
     </div>

@@ -36,6 +36,7 @@ export default async function AdminOrdersPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Admin"
         title="Orders"
         description="Manage all orders across the panel."
       />

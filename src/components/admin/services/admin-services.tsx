@@ -218,7 +218,8 @@ export function AdminServices({
               <EmptyState title="No services found" />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto lg:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
@@ -309,6 +310,50 @@ export function AdminServices({
                 </tbody>
               </table>
             </div>
+            <ul className="divide-y lg:hidden">
+              {filtered.map((service) => {
+                const cat = categories.find((c) => c.id === service.category_id);
+                const provider = providers.find((p) => p.id === service.provider_id);
+                return (
+                  <li key={service.id} className="p-4">
+                    <div className="flex items-start gap-3">
+                      <Checkbox className="mt-1" checked={selected.has(service.id)} onCheckedChange={() => toggleSelect(service.id)} />
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 text-sm font-medium">{service.name}</p>
+                        <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                          <Badge variant="subtle" className="px-1.5 py-0 text-[10px]">{cat?.name ?? "No category"}</Badge>
+                          {provider ? <Badge variant="subtle" className="px-1.5 py-0 text-[10px]">{provider.name}</Badge> : null}
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          <span>Price <span className="font-semibold text-primary tabular-nums">{formatUsd(service.price)}</span></span>
+                          <span>Cost <span className="tabular-nums">{service.provider_price != null ? formatUsd(service.provider_price) : "—"}</span></span>
+                          <span>{service.profit_margin}%</span>
+                        </div>
+                      </div>
+                      <Switch checked={service.is_active} onCheckedChange={(checked) => toggleActive([service.id], checked)} disabled={loading} />
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">
+                        {service.min_quantity.toLocaleString()} - {service.max_quantity.toLocaleString()}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="iconSm" onClick={() => setEditing(service)} aria-label="Edit service">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="iconSm" className="text-destructive hover:text-destructive" onClick={async () => {
+                          if (!confirm("Delete this service?")) return;
+                          const result = await deleteServiceAction(service.id);
+                          if (result.success) { toast.success("Service deleted"); router.refresh(); } else { toast.error(result.error ?? "Failed"); }
+                        }} aria-label="Delete service">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            </>
           )}
         </CardContent>
       </Card>

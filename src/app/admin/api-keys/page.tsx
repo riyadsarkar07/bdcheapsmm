@@ -18,6 +18,7 @@ export default async function AdminApiKeysPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Admin"
         title="API Keys"
         description="Let resellers integrate the SMM API. Keys are shown only once at creation and stored hashed."
       />

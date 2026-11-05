@@ -30,6 +30,7 @@ export default async function AdminSettingsPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Admin"
         title="Settings"
         description="Site-wide configuration. Currency and maintenance mode apply globally."
       />

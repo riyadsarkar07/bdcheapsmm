@@ -22,6 +22,7 @@ export default async function AdminServicesPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Admin"
         title="Services"
         description="Manage, bulk-update and sync services."
       >

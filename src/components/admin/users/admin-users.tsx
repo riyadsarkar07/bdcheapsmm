@@ -85,7 +85,8 @@ export function AdminUsers({
               <EmptyState title="No users found" />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
@@ -180,6 +181,44 @@ export function AdminUsers({
                 </tbody>
               </table>
             </div>
+            <ul className="divide-y md:hidden">
+              {filtered.map((userRow) => (
+                <li key={userRow.id} className="p-4">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-9 w-9">
+                      <AvatarImage src={userRow.avatar_url ?? undefined} />
+                      <AvatarFallback>{getInitials(userRow.full_name)}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{userRow.full_name ?? "User"}</p>
+                      <p className="truncate text-xs text-muted-foreground">{userRow.email}</p>
+                    </div>
+                    <Badge variant={userRow.status === "active" ? "success" : "destructive"} className="capitalize">
+                      {userRow.status}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Badge variant={userRow.role === "admin" ? "info" : "secondary"} className="capitalize">
+                        {userRow.role}
+                      </Badge>
+                      <span className="font-semibold text-primary tabular-nums">
+                        {formatCurrency(userRow.balance, userRow.currency)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="iconSm" onClick={() => setEditing(userRow)} aria-label="Edit user">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="iconSm" onClick={() => setAdjusting(userRow)} aria-label="Adjust balance">
+                        <Wallet className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            </>
           )}
         </CardContent>
       </Card>

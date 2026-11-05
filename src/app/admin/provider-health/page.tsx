@@ -54,6 +54,7 @@ export default async function AdminProviderHealthPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Admin"
         title="Provider Health"
         description="Live API availability for every SMM provider. Checks run automatically every 10 minutes."
       />

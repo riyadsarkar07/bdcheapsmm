@@ -67,7 +67,8 @@ export function AdminCoupons({ coupons }: { coupons: CouponRow[] }) {
               <EmptyState title="No coupons yet" description="Create a coupon to start promoting your panel." />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
@@ -153,6 +154,46 @@ export function AdminCoupons({ coupons }: { coupons: CouponRow[] }) {
                 </tbody>
               </table>
             </div>
+            <ul className="divide-y md:hidden">
+              {coupons.map((coupon) => {
+                const expired = coupon.expires_at ? new Date(coupon.expires_at).getTime() < Date.now() : false;
+                return (
+                  <li key={coupon.id} className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-md bg-primary/10 px-2 py-0.5 font-mono text-xs font-semibold text-primary">{coupon.code}</span>
+                        <button className="text-muted-foreground hover:text-foreground" onClick={async () => { await navigator.clipboard.writeText(coupon.code); toast.success("Copied"); }} aria-label="Copy code">
+                          <Copy className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <Badge variant={!coupon.is_active ? "destructive" : expired ? "secondary" : "success"}>
+                        {!coupon.is_active ? "Disabled" : expired ? "Expired" : "Active"}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-sm">
+                      {coupon.discount_type === "percent" ? `${coupon.discount_value}% off` : formatCurrency(coupon.discount_value)}
+                      {coupon.min_amount ? <span className="text-xs text-muted-foreground"> · min {formatCurrency(coupon.min_amount)}</span> : null}
+                    </p>
+                    <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{coupon.used_count} / {coupon.usage_limit ?? "∞"} used</span>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="iconSm" onClick={() => setEditing(coupon)} aria-label="Edit coupon">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="iconSm" className="text-destructive hover:text-destructive" onClick={async () => {
+                          if (!confirm(`Delete coupon ${coupon.code}?`)) return;
+                          const result = await deleteCouponAction(coupon.id);
+                          if (result.success) { toast.success("Coupon deleted"); router.refresh(); } else { toast.error(result.error ?? "Failed"); }
+                        }} aria-label="Delete coupon">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            </>
           )}
         </CardContent>
       </Card>

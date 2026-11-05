@@ -100,8 +100,9 @@ export default async function AdminDashboardPage() {
   return (
     <div>
       <PageHeader
-        title="Admin Dashboard"
-        description="Overview of your SMM panel."
+        eyebrow="Admin"
+        title="Dashboard"
+        description="Overview of your SMM panel performance."
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -132,7 +133,7 @@ export default async function AdminDashboardPage() {
                   <EmptyState title="No orders yet" />
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="hidden overflow-x-auto md:block">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b">
@@ -167,6 +168,28 @@ export default async function AdminDashboardPage() {
                   </table>
                 </div>
               )}
+              <ul className="divide-y md:hidden">
+                {(recentOrders.data ?? []).map((order) => (
+                  <li key={order.id}>
+                    <Link
+                      href={`/orders/${order.id}`}
+                      className="block px-4 py-3 transition-colors hover:bg-muted/50"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold text-primary">#{order.order_number}</span>
+                        <OrderStatusBadge status={order.status as OrderStatus} />
+                      </div>
+                      <p className="mt-1 line-clamp-1 text-sm">
+                        {truncate(order.services?.name ?? "—", 40)}
+                      </p>
+                      <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                        <span className="truncate">{order.profiles?.full_name ?? order.profiles?.email ?? "—"}</span>
+                        <span className="tabular-nums">{formatUsd(order.price)}</span>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </CardContent>
           </Card>
         </div>

@@ -93,7 +93,8 @@ export function AdminHelpCenter({
               />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
@@ -175,6 +176,47 @@ export function AdminHelpCenter({
                 </tbody>
               </table>
             </div>
+            <ul className="divide-y md:hidden">
+              {articles.map((article) => (
+                <li key={article.id} className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{article.title}</p>
+                      <p className="truncate text-xs text-muted-foreground">{article.slug}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                      <Badge variant={article.is_published ? "success" : "subtle"}>{article.is_published ? "Published" : "Draft"}</Badge>
+                      {article.is_popular ? <Badge variant="info">Popular</Badge> : null}
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Badge variant="secondary">{HELP_CATEGORY_META[article.category as HelpArticleCategory]?.label ?? article.category}</Badge>
+                      <span>{formatDateTime(article.updated_at, "MMM d, h:mm a")}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="iconSm" onClick={async () => {
+                        const result = await toggleHelpArticlePublishAction(article.id, !article.is_published);
+                        if (result.success) { toast.success(result.message ?? "Updated"); router.refresh(); } else { toast.error(result.error ?? "Failed"); }
+                      }} aria-label={article.is_published ? "Unpublish" : "Publish"}>
+                        {article.is_published ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button variant="ghost" size="iconSm" onClick={() => setEditing(article)} aria-label="Edit article">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="iconSm" className="text-destructive hover:text-destructive" onClick={async () => {
+                        if (!confirm(`Delete article "${article.title}"?`)) return;
+                        const result = await deleteHelpArticleAction(article.id);
+                        if (result.success) { toast.success("Article deleted"); router.refresh(); } else { toast.error(result.error ?? "Failed"); }
+                      }} aria-label="Delete article">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            </>
           )}
         </CardContent>
       </Card>

@@ -18,6 +18,7 @@ export default async function AdminNoticesPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Admin"
         title="Notice Board"
         description="Create, publish and manage notices shown to users."
       />

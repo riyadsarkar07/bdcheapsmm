@@ -92,7 +92,8 @@ export function AdminReferrals({
               <EmptyState title="No referrals yet" description="Referred users will appear here." />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
@@ -136,6 +137,24 @@ export function AdminReferrals({
                 </tbody>
               </table>
             </div>
+            <ul className="divide-y md:hidden">
+              {referrals.map((row) => (
+                <li key={row.id} className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{row.referred?.full_name ?? row.referred?.email ?? "—"}</p>
+                      <p className="truncate text-xs text-muted-foreground">by {row.referrer?.full_name ?? row.referrer?.email ?? "—"}</p>
+                    </div>
+                    {row.commissionCount > 0 ? <Badge variant="success">Rewarded</Badge> : <Badge variant="warning">Pending</Badge>}
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{row.approvedDeposits} deposits · {row.approvedDepositTotal > 0 ? formatCurrency(row.approvedDepositTotal, currency) : "—"}</span>
+                    <span className="font-semibold text-success">{row.commissionTotal > 0 ? `+${formatCurrency(row.commissionTotal, currency)}` : "—"}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            </>
           )}
         </CardContent>
       </Card>
@@ -150,7 +169,8 @@ export function AdminReferrals({
               <EmptyState title="No commissions yet" description="Commissions earned from approved referral deposits will appear here." />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
@@ -186,6 +206,24 @@ export function AdminReferrals({
                 </tbody>
               </table>
             </div>
+            <ul className="divide-y md:hidden">
+              {commissions.map((row) => (
+                <li key={row.id} className="p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{row.referrer?.full_name ?? row.referrer?.email ?? "—"}</p>
+                      <p className="truncate text-xs text-muted-foreground">from {row.referred?.full_name ?? row.referred?.email ?? "—"}</p>
+                    </div>
+                    <span className="shrink-0 text-sm font-semibold text-success">+{formatCurrency(row.amount, row.currency)}</span>
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{formatDateTime(row.created_at)}</span>
+                    <span>{formatCurrency(row.deposit_amount, row.currency)} · {row.rate_percent}%</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            </>
           )}
         </CardContent>
       </Card>

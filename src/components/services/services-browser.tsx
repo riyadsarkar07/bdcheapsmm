@@ -249,19 +249,18 @@ export function ServicesBrowser() {
   return (
     <div>
       <PageHeader
+        eyebrow="Catalog"
         title="Services"
         description="Pick a platform and service, enter your link and quantity — we handle the rest."
       >
-        <Badge variant="info" className="hidden text-sm sm:inline-flex">
+        <Badge variant="info" className="text-sm">
           Balance: {profile ? formatBalance(profile.balance, profile.currency) : "..."}
         </Badge>
       </PageHeader>
 
       {/* Platform menu: pick a platform to browse its services */}
       <div className="mb-6">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Browse by platform
-        </p>
+        <p className="eyebrow mb-3">Browse by platform</p>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
           <PlatformTile
             active={platform === "all"}
@@ -358,15 +357,35 @@ export function ServicesBrowser() {
         ) : null}
       </AnimatePresence>
 
-      {/* Search */}
-      <div ref={servicesRef} className="relative mb-6 max-w-md scroll-mt-20">
-        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Search services..."
-          className="pl-9"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Search + result meta */}
+      <div ref={servicesRef} className="mb-5 scroll-mt-20">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search services by name..."
+              className="pl-9 pr-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search services"
+            />
+            {search ? (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                aria-label="Clear search"
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {isLoading
+              ? "Loading services..."
+              : `${services?.length ?? 0} service${(services?.length ?? 0) === 1 ? "" : "s"} shown`}
+          </p>
+        </div>
       </div>
 
       {/* Selected service: order form (left) + details (right) on desktop, stacked on mobile */}
@@ -381,6 +400,7 @@ export function ServicesBrowser() {
               maxQuantity={selected.max_quantity}
               balance={profile?.balance ?? 0}
               linkPlaceholder={exampleLinkForPlatform(selectedPlatform)}
+              averageTime={selected.average_time}
             />
           </div>
           <div className="lg:col-span-3">
@@ -421,17 +441,17 @@ export function ServicesBrowser() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.2, delay: Math.min(index * 0.01, 0.3) }}
                 className={cn(
-                  "glass-card group flex flex-col rounded-xl p-5 transition-all hover:-translate-y-0.5 hover:shadow-xl",
+                  "glass-card group flex flex-col p-4 transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-elevated sm:p-5",
                   isSelected && "ring-2 ring-primary/50"
                 )}
               >
                 <div className="mb-2 flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg gradient-bg text-white shadow">
-                      <PlatformLogo slug={servicePlatform} className="h-4 w-4" color="white" />
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
+                      <PlatformLogo slug={servicePlatform} className="h-4 w-4" />
                     </div>
-                    <div>
-                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <div className="min-w-0">
+                      <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                         {PLATFORM_LABELS[servicePlatform] ?? servicePlatform}
                       </p>
                       {service.is_featured ? (
@@ -441,8 +461,9 @@ export function ServicesBrowser() {
                   </div>
                   <button
                     onClick={() => toggleFavorite(service.id, isFavorite)}
-                    className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted"
-                    aria-label="Toggle favorite"
+                    className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-rose-500"
+                    aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                    aria-pressed={isFavorite}
                   >
                     {isFavorite ? (
                       <Heart className="h-4 w-4 fill-rose-500 text-rose-500" />
@@ -452,9 +473,9 @@ export function ServicesBrowser() {
                   </button>
                 </div>
 
-                <h3 className="line-clamp-2 text-sm font-semibold leading-snug">{service.name}</h3>
+                <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-snug">{service.name}</h3>
 
-                <div className="mt-3 flex items-center gap-3 text-[11px] text-muted-foreground">
+                <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Minus className="h-3 w-3" /> {service.min_quantity.toLocaleString()}
                   </span>
@@ -468,14 +489,18 @@ export function ServicesBrowser() {
                   ) : null}
                 </div>
 
-                <div className="mt-4 flex items-center justify-between border-t pt-3">
+                <div className="mt-auto flex items-center justify-between gap-2 border-t pt-3">
                   <div>
-                    <p className="text-lg font-bold text-primary">
+                    <p className="text-lg font-bold text-primary tabular-nums">
                       {formatUsd(service.price)}
                       <span className="text-xs font-normal text-muted-foreground"> / 1k</span>
                     </p>
                   </div>
-                  <Button size="sm" variant={isSelected ? "gradient" : "outline"} onClick={() => selectService(service)}>
+                  <Button
+                    size="sm"
+                    variant={isSelected ? "gradient" : "outline"}
+                    onClick={() => selectService(service)}
+                  >
                     {isSelected ? "Selected" : "Order"}
                     <ArrowRight className="h-3.5 w-3.5" />
                   </Button>

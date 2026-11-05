@@ -64,7 +64,8 @@ export function AdminApiKeys({ apiKeys }: { apiKeys: ApiKeyRow[] }) {
               />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
@@ -150,6 +151,43 @@ export function AdminApiKeys({ apiKeys }: { apiKeys: ApiKeyRow[] }) {
                 </tbody>
               </table>
             </div>
+            <ul className="divide-y md:hidden">
+              {apiKeys.map((apiKey) => {
+                const permissions = (apiKey.permissions as string[]) ?? [];
+                const expired = apiKey.expires_at ? new Date(apiKey.expires_at).getTime() < Date.now() : false;
+                return (
+                  <li key={apiKey.id} className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{apiKey.name}</p>
+                        <span className="mt-1 inline-block rounded-md bg-muted px-2 py-0.5 font-mono text-xs">{apiKey.key_prefix}••••••••</span>
+                      </div>
+                      <Switch
+                        checked={apiKey.is_active && !expired}
+                        onCheckedChange={async (v) => {
+                          const result = await toggleApiKeyAction(apiKey.id, v);
+                          if (result.success) { toast.success(result.message ?? "Updated"); router.refresh(); } else { toast.error(result.error ?? "Failed"); }
+                        }}
+                      />
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {permissions.length === 0 ? <span className="text-xs text-muted-foreground">No permissions</span> : permissions.map((p) => <Badge key={p} variant="secondary">{p}</Badge>)}
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Used {apiKey.last_used_at ? timeAgo(apiKey.last_used_at) : "never"} · {apiKey.expires_at ? `expires ${formatDateTime(apiKey.expires_at, "MMM d, yyyy")}` : "no expiry"}</span>
+                      <Button variant="ghost" size="iconSm" className="text-destructive hover:text-destructive" onClick={async () => {
+                        if (!confirm(`Delete API key "${apiKey.name}"? Orders already placed are unaffected.`)) return;
+                        const result = await deleteApiKeyAction(apiKey.id);
+                        if (result.success) { toast.success("API key deleted"); router.refresh(); } else { toast.error(result.error ?? "Failed"); }
+                      }} aria-label="Delete API key">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            </>
           )}
         </CardContent>
       </Card>

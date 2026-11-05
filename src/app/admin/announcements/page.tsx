@@ -23,6 +23,7 @@ export default async function AdminAnnouncementsPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Admin"
         title="Announcements"
         description="Send system announcements to all users or a single user. They appear in the notification bell."
       />

@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   RefreshCw,
   XCircle,
@@ -18,6 +18,7 @@ import {
   Clock,
   FileDown,
   TrendingUp,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +26,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -58,6 +60,16 @@ function ProfitValue({ value }: { value: number | null }) {
   );
 }
 
+function deliveryProgress(order: OrderWithRelations): number {
+  if (order.status === "completed") return 100;
+  if (order.remain == null || order.quantity <= 0) {
+    if (["pending", "processing"].includes(order.status)) return 4;
+    return 0;
+  }
+  const delivered = Math.max(0, order.quantity - order.remain);
+  return Math.min(100, Math.round((delivered / order.quantity) * 100));
+}
+
 export function OrderDetailClient({
   order,
   providerName,
@@ -70,6 +82,7 @@ export function OrderDetailClient({
   profit?: OrderProfit;
 }) {
   const router = useRouter();
+  const reduced = useReducedMotion();
   const [orderState, setOrderState] = React.useState(order);
   const [action, setAction] = React.useState<string | null>(null);
   const [retryOpen, setRetryOpen] = React.useState(false);
@@ -132,6 +145,13 @@ export function OrderDetailClient({
   const canCancel = ["pending", "processing", "in_progress"].includes(orderState.status);
   const canRefill = orderState.status === "completed" || orderState.status === "partial";
   const canRetry = orderState.status === "failed" || orderState.status === "rejected";
+  const progress = deliveryProgress(orderState);
+  const delivered =
+    orderState.remain != null
+      ? Math.max(0, orderState.quantity - orderState.remain)
+      : orderState.status === "completed"
+        ? orderState.quantity
+        : 0;
 
   const details = [
     { label: "Order Number", value: `#${orderState.order_number}`, copy: orderState.order_number },
@@ -149,16 +169,20 @@ export function OrderDetailClient({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={reduced ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       className="space-y-5"
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Order #{orderState.order_number}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{orderState.services?.name}</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="eyebrow mb-1">Order details</p>
+          <h1 className="truncate text-2xl font-bold">Order #{orderState.order_number}</h1>
+          <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{orderState.services?.name}</p>
         </div>
-        <OrderStatusBadge status={orderState.status} />
+        <div className="flex items-center gap-2">
+          <OrderStatusBadge status={orderState.status} />
+          <Badge variant="secondary">{formatUsd(orderState.price)}</Badge>
+        </div>
       </div>
 
       {orderState.error_message ? (
@@ -169,52 +193,89 @@ export function OrderDetailClient({
       ) : null}
 
       <div className="grid gap-5 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Hash className="h-4 w-4" /> Order Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-              {details.map((item) => (
-                <div key={item.label} className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
-                  <dt className="text-xs text-muted-foreground">{item.label}</dt>
-                  <dd className="flex items-center gap-1 text-right text-sm font-medium">
-                    <span className="max-w-[180px] truncate">{item.value}</span>
-                    {item.copy ? <CopyButton value={item.copy} label={`Copy ${item.label}`} /> : null}
-                  </dd>
+        <div className="space-y-5 lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Clock className="h-4 w-4 text-primary" /> Delivery progress
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-2 flex items-end justify-between">
+                <div>
+                  <p className="text-2xl font-bold tabular-nums">{progress}%</p>
+                  <p className="text-xs text-muted-foreground">
+                    {delivered.toLocaleString()} of {orderState.quantity.toLocaleString()} delivered
+                  </p>
                 </div>
-              ))}
-            </dl>
-
-            <Separator className="my-4" />
-
-            <div className="flex flex-col gap-2">
-              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Target Link
-              </p>
-              <div className="flex items-center gap-2 rounded-lg border p-3">
-                <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate text-sm">{orderState.link}</span>
-                <a
-                  href={orderState.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-muted-foreground hover:text-primary"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-                <CopyButton value={orderState.link} />
+                <div className="text-right text-xs text-muted-foreground">
+                  {orderState.remain != null ? (
+                    <>
+                      <p className="font-semibold text-foreground tabular-nums">
+                        {orderState.remain.toLocaleString()}
+                      </p>
+                      <p>remaining</p>
+                    </>
+                  ) : (
+                    <p>Progress pending</p>
+                  )}
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+              <Progress value={progress} className="h-2.5" />
+              {orderState.status === "completed" ? (
+                <p className="mt-2 flex items-center gap-1.5 text-xs text-success">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Delivery complete
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
 
-        <Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Hash className="h-4 w-4 text-primary" /> Order Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+                {details.map((item) => (
+                  <div key={item.label} className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                    <dt className="text-xs text-muted-foreground">{item.label}</dt>
+                    <dd className="flex min-w-0 items-center gap-1 text-right text-sm font-medium">
+                      <span className="max-w-[180px] truncate">{item.value}</span>
+                      {item.copy ? <CopyButton value={item.copy} label={`Copy ${item.label}`} /> : null}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+
+              <Separator className="my-4" />
+
+              <div className="flex flex-col gap-2">
+                <p className="eyebrow">Target link</p>
+                <div className="flex items-center gap-2 rounded-lg border p-3">
+                  <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate text-sm">{orderState.link}</span>
+                  <a
+                    href={orderState.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground transition-colors hover:text-primary"
+                    aria-label="Open target link in a new tab"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                  <CopyButton value={orderState.link} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="h-fit lg:sticky lg:top-24">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Layers className="h-4 w-4" /> Actions
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Layers className="h-4 w-4 text-primary" /> Actions
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2.5">
@@ -280,7 +341,7 @@ export function OrderDetailClient({
       {isAdmin && profit ? (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-base">
               <TrendingUp className="h-4 w-4" /> Profit
             </CardTitle>
           </CardHeader>
@@ -385,7 +446,6 @@ export function OrderDetailClient({
           </form>
         </DialogContent>
       </Dialog>
-
 
       {isAdmin && orderState.provider_response ? (
         <Card>

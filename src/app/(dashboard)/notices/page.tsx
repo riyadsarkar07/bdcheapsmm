@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/guards";
 import { PageHeader } from "@/components/page-header";
 import { NoticeBoard, type NoticeWithRead } from "@/components/notices/notice-board";
+import { Megaphone } from "lucide-react";
 
 export const revalidate = 0;
 
@@ -28,8 +29,10 @@ export default async function NoticesPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Updates"
         title="Notice Board"
         description="Admin announcements, updates, maintenance and important offers."
+        icon={<Megaphone />}
       />
       <NoticeBoard notices={rows} />
     </div>

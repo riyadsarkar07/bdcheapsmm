@@ -87,7 +87,8 @@ export function AdminTransactions({ transactions }: { transactions: TransactionR
               <EmptyState title="No transactions found" />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
@@ -133,6 +134,33 @@ export function AdminTransactions({ transactions }: { transactions: TransactionR
                 </tbody>
               </table>
             </div>
+            <ul className="divide-y md:hidden">
+              {filtered.map((transaction) => {
+                const signed = Number(transaction.amount) || 0;
+                const isCredit = signed >= 0;
+                return (
+                  <li key={transaction.id} className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{transaction.profiles?.full_name ?? "User"}</p>
+                        <p className="truncate text-xs text-muted-foreground">{transaction.profiles?.email}</p>
+                      </div>
+                      <span className={`shrink-0 text-sm font-semibold tabular-nums ${isCredit ? "text-success" : "text-destructive"}`}>
+                        {isCredit ? "+" : "−"}{formatUsd(Math.abs(signed))}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <Badge variant={typeStyles[transaction.type]}>{transaction.type.replace("_", " ")}</Badge>
+                      <span className="text-xs text-muted-foreground">{formatDateTime(transaction.created_at, "MMM d, h:mm a")}</span>
+                    </div>
+                    {transaction.description ? (
+                      <p className="mt-1.5 line-clamp-2 text-xs text-muted-foreground">{transaction.description}</p>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+            </>
           )}
         </CardContent>
       </Card>

@@ -4,10 +4,9 @@ import { requireUser } from "@/lib/guards";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
-import { Bell } from "lucide-react";
-import { timeAgo } from "@/lib/utils";
+import { Bell, CheckCheck } from "lucide-react";
+import { cn, timeAgo } from "@/lib/utils";
 import { markAllNotificationsReadAction } from "@/lib/actions/profile";
-import { CheckCheck } from "lucide-react";
 
 export const revalidate = 0;
 
@@ -26,8 +25,10 @@ export default async function NotificationsPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Inbox"
         title="Notifications"
         description="Payment updates, order status changes and announcements."
+        icon={<Bell />}
       >
         <form action={markAllNotificationsReadAction}>
           <Button type="submit" variant="outline" size="sm">
@@ -47,17 +48,26 @@ export default async function NotificationsPage() {
           {(notifications ?? []).map((notif) => {
             const content = (
               <div
-                className={`glass-card flex items-start gap-3 rounded-xl p-4 transition-colors ${
-                  !notif.is_read ? "border-primary/40" : ""
-                }`}
+                className={cn(
+                  "glass-card flex items-start gap-3 p-4 transition-colors",
+                  !notif.is_read && "border-primary/30 bg-primary/5"
+                )}
               >
                 <div
-                  className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${
+                  className={cn(
+                    "mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full",
                     notif.is_read ? "bg-muted-foreground/30" : "gradient-bg"
-                  }`}
+                  )}
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium">{notif.title}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-medium">{notif.title}</p>
+                    {!notif.is_read ? (
+                      <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-primary">
+                        New
+                      </span>
+                    ) : null}
+                  </div>
                   {notif.body ? (
                     <p className="mt-0.5 text-sm text-muted-foreground">{notif.body}</p>
                   ) : null}
@@ -68,7 +78,7 @@ export default async function NotificationsPage() {
               </div>
             );
             return notif.link ? (
-              <Link key={notif.id} href={notif.link}>
+              <Link key={notif.id} href={notif.link} className="block">
                 {content}
               </Link>
             ) : (

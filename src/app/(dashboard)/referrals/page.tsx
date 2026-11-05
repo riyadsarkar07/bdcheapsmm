@@ -82,8 +82,10 @@ export default async function ReferralsPage() {
   return (
     <div>
       <PageHeader
+        eyebrow="Growth"
         title="Referrals"
         description="Share your link and earn a commission every time a referred user tops up."
+        icon={<Users />}
       />
 
       {!user.referral_code ? (
@@ -143,7 +145,7 @@ export default async function ReferralsPage() {
               ) : (
                 <Card>
                   <CardContent className="p-0">
-                    <div className="overflow-x-auto">
+                    <div className="hidden overflow-x-auto md:block">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b">
@@ -186,6 +188,29 @@ export default async function ReferralsPage() {
                         </tbody>
                       </table>
                     </div>
+                    <ul className="divide-y md:hidden">
+                      {history.map((row) => (
+                        <li key={row.id} className="p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">{row.profile?.full_name ?? row.profile?.email ?? "—"}</p>
+                              <p className="truncate text-xs text-muted-foreground">{row.profile?.email}</p>
+                            </div>
+                            {row.commissionCount > 0 ? (
+                              <Badge variant="success">Rewarded</Badge>
+                            ) : (
+                              <Badge variant="warning">Pending</Badge>
+                            )}
+                          </div>
+                          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Joined {formatDateTime(row.profile?.created_at ?? row.created_at)}</span>
+                            <span className="font-semibold text-success">
+                              {row.commissionTotal > 0 ? `+${formatCurrency(row.commissionTotal, user.currency)}` : "—"}
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
                   </CardContent>
                 </Card>
               )}
