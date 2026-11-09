@@ -2,9 +2,15 @@
 
 import * as React from "react";
 import { useReducedMotion } from "framer-motion";
-import { cn } from "@/lib/utils";
+import { cn, formatUsd } from "@/lib/utils";
 
 export type ChartPoint = { label: string; value: number };
+
+/**
+ * Serializable value-format descriptor. A function cannot cross the
+ * Server -> Client boundary, so callers pass a string that is resolved here.
+ */
+export type ChartValueFormat = "number" | "usd";
 
 /**
  * A small, dependency-free area chart. Rendered as SVG so it stays crisp on
@@ -14,16 +20,18 @@ export type ChartPoint = { label: string; value: number };
 export function MiniAreaChart({
   data,
   height = 160,
-  formatValue,
+  valueFormat = "number",
   className,
   accent = "hsl(var(--primary))",
 }: {
   data: ChartPoint[];
   height?: number;
-  formatValue?: (value: number) => string;
+  valueFormat?: ChartValueFormat;
   className?: string;
   accent?: string;
 }) {
+  const formatValue = (value: number) =>
+    valueFormat === "usd" ? formatUsd(value) : value.toLocaleString("en-US");
   const reduced = useReducedMotion();
   const [hover, setHover] = React.useState<number | null>(null);
   const id = React.useId().replace(/:/g, "");
@@ -134,7 +142,7 @@ export function MiniAreaChart({
               onFocus={() => setHover(i)}
               tabIndex={0}
               role="button"
-              aria-label={`${p.label}: ${formatValue ? formatValue(p.value) : p.value}`}
+              aria-label={`${p.label}: ${formatValue(p.value)}`}
               className="cursor-pointer outline-none"
             />
             <text
@@ -171,7 +179,7 @@ export function MiniAreaChart({
           }}
         >
           <p className="font-semibold">
-            {formatValue ? formatValue(active.value) : active.value}
+            {formatValue(active.value)}
           </p>
           <p className="text-[10px] text-muted-foreground">{active.label}</p>
         </div>

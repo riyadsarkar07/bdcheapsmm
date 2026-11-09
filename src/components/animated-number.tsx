@@ -2,6 +2,17 @@
 
 import * as React from "react";
 import { useReducedMotion } from "framer-motion";
+import { formatCurrency, formatUsd } from "@/lib/utils";
+
+/**
+ * Serializable formatter descriptor.
+ *
+ * These components are rendered from Server Components, so a formatter
+ * *function* cannot be passed as a prop (React Server Components cannot
+ * serialize functions across the server -> client boundary). Instead callers
+ * pass a plain string that the client component resolves to a real formatter.
+ */
+export type NumberFormatKind = "number" | "usd" | "currency";
 
 /**
  * Smoothly counts from the previous value to the next one. Falls back to an
@@ -11,12 +22,14 @@ import { useReducedMotion } from "framer-motion";
  */
 export function AnimatedNumber({
   value,
-  format,
+  format = "number",
+  currency = "BDT",
   duration = 500,
   className,
 }: {
   value: number;
-  format?: (value: number) => string;
+  format?: NumberFormatKind;
+  currency?: string;
   duration?: number;
   className?: string;
 }) {
@@ -61,9 +74,14 @@ export function AnimatedNumber({
 
   const shown = Number.isFinite(display) ? display : 0;
 
-  return (
-    <span className={className}>
-      {format ? format(shown) : Math.round(shown).toLocaleString("en-US")}
-    </span>
-  );
+  let text: string;
+  if (format === "usd") {
+    text = formatUsd(shown);
+  } else if (format === "currency") {
+    text = formatCurrency(shown, currency);
+  } else {
+    text = Math.round(shown).toLocaleString("en-US");
+  }
+
+  return <span className={className}>{text}</span>;
 }
