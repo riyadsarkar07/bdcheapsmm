@@ -393,12 +393,14 @@ export function ServicesBrowser() {
         <div ref={detailRef} className="mb-8 grid gap-6 lg:grid-cols-5">
           <div className="lg:col-span-2">
             <OrderForm
+              key={selected.id}
               serviceId={selected.id}
               serviceName={selected.name}
               pricePerUnit={Number(selected.price)}
               minQuantity={selected.min_quantity}
               maxQuantity={selected.max_quantity}
               balance={profile?.balance ?? 0}
+              currency={profile?.currency ?? "BDT"}
               linkPlaceholder={exampleLinkForPlatform(selectedPlatform)}
               averageTime={selected.average_time}
             />

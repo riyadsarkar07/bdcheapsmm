@@ -19,7 +19,7 @@ import {
   XCircle,
   TrendingUp,
 } from "lucide-react";
-import { formatCurrency, formatUsd, formatDateTime, truncate } from "@/lib/utils";
+import { formatCurrency, formatDateTime, truncate } from "@/lib/utils";
 import type { OrderStatus, PaymentStatus } from "@/lib/types/database";
 
 export default async function AdminDashboardPage() {
@@ -54,7 +54,7 @@ export default async function AdminDashboardPage() {
     supabase.from("orders").select("id", { count: "exact", head: true }).in("status", ["pending", "processing", "in_progress"]),
     supabase.from("orders").select("id", { count: "exact", head: true }).eq("status", "completed"),
     supabase.from("orders").select("id", { count: "exact", head: true }).eq("status", "cancelled"),
-    supabase.from("transactions").select("amount").eq("type", "order_deduction"),
+    supabase.from("transactions").select("amount, currency").eq("type", "order_deduction"),
     supabase.from("payment_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
     supabase.from("tickets").select("id", { count: "exact", head: true }).in("status", ["open", "waiting"]),
     supabase.from("services").select("id", { count: "exact", head: true }).eq("is_active", true),
@@ -77,7 +77,11 @@ export default async function AdminDashboardPage() {
       .limit(5),
   ]);
 
-  const revenue = (revenueRes.data ?? []).reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
+  const revenue = new Map<string, number>();
+  for (const entry of revenueRes.data ?? []) {
+    revenue.set(entry.currency, (revenue.get(entry.currency) ?? 0) + Math.abs(entry.amount));
+  }
+  const revenueLabel = Array.from(revenue, ([unit, amount]) => formatCurrency(amount, unit)).join(" + ") || "0";
 
   // payment_requests has two FKs to profiles (user_id, processed_by), so the
   // profiles(...) embed is ambiguous. Fetch the requesters separately.
@@ -111,7 +115,7 @@ export default async function AdminDashboardPage() {
         <StatCard title="Pending Orders" value={pendingOrders.count ?? 0} icon={<Clock className="h-5 w-5" />} color="warning" />
         <StatCard title="Deposits (Pending)" value={pendingPayments.count ?? 0} icon={<Banknote className="h-5 w-5" />} color="destructive" />
         <StatCard title="Open Tickets" value={openTickets.count ?? 0} icon={<Ticket className="h-5 w-5" />} color="warning" />
-        <StatCard title="Total Revenue" value={formatUsd(revenue)} icon={<TrendingUp className="h-5 w-5" />} color="success" description="From all order charges" />
+        <StatCard title="Total Revenue" value={revenueLabel} icon={<TrendingUp className="h-5 w-5" />} color="success" description="From all order charges" />
       </div>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -158,7 +162,7 @@ export default async function AdminDashboardPage() {
                           <td className="max-w-[180px] px-4 py-3">
                             <span className="line-clamp-1">{truncate(order.services?.name ?? "—", 30)}</span>
                           </td>
-                          <td className="px-4 py-3 text-right font-medium">{formatUsd(order.price)}</td>
+                          <td className="px-4 py-3 text-right font-medium">{formatCurrency(order.price, order.currency)}</td>
                           <td className="px-4 py-3">
                             <OrderStatusBadge status={order.status as OrderStatus} />
                           </td>
@@ -184,7 +188,7 @@ export default async function AdminDashboardPage() {
                       </p>
                       <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
                         <span className="truncate">{order.profiles?.full_name ?? order.profiles?.email ?? "—"}</span>
-                        <span className="tabular-nums">{formatUsd(order.price)}</span>
+                        <span className="tabular-nums">{formatCurrency(order.price, order.currency)}</span>
                       </div>
                     </Link>
                   </li>

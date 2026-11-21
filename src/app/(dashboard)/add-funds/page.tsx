@@ -66,7 +66,7 @@ export default async function AddFundsPage() {
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <AddFundsForm
           payments={settings.payments}
-          currency={user.currency}
+          userId={user.id}
         />
         <PaymentHistory requests={rows} />
       </div>

@@ -243,7 +243,7 @@ function drawMetaRows(
 interface OrderInvoiceInput {
   order: Pick<
     Order,
-    "order_number" | "link" | "quantity" | "price" | "status" | "provider_order_id" | "created_at"
+    "order_number" | "link" | "quantity" | "price" | "currency" | "status" | "provider_order_id" | "created_at"
   >;
   serviceName: string | null;
   profile: BillTo;
@@ -304,7 +304,7 @@ export async function generateOrderInvoicePdf(input: OrderInvoiceInput): Promise
 
   const qtyValue = input.order.quantity.toLocaleString("en-US");
   page.drawText(qtyValue, { x: colQtyX - font.widthOfTextAtSize(qtyValue, 10), y: tableTop - 40, size: 10, font, color: TEXT_DARK });
-  const amountValue = formatUsd(input.order.price);
+  const amountValue = formatCurrency(input.order.price, input.order.currency);
   page.drawText(amountValue, { x: colAmountX - font.widthOfTextAtSize(amountValue, 10), y: tableTop - 40, size: 10, font: bold, color: TEXT_DARK });
 
   // Bottom border of the table + totals (border tracks the wrapped link bottom)
@@ -312,7 +312,7 @@ export async function generateOrderInvoicePdf(input: OrderInvoiceInput): Promise
   page.drawLine({ start: { x: MARGIN, y: tableBottom }, end: { x: PAGE_WIDTH - MARGIN, y: tableBottom }, thickness: 1, color: BORDER });
   const totalLabel = "Amount Paid";
   page.drawText(totalLabel, { x: colQtyX - font.widthOfTextAtSize(totalLabel, 11), y: tableBottom - 20, size: 11, font: bold, color: TEXT_DARK });
-  const totalValue = formatUsd(input.order.price);
+  const totalValue = formatCurrency(input.order.price, input.order.currency);
   page.drawText(totalValue, { x: colAmountX - font.widthOfTextAtSize(totalValue, 12), y: tableBottom - 21, size: 12, font: bold, color: ACCENT });
 
   drawInvoiceFooter(page, font, bold, input.panel.name, input.timezone ?? null);

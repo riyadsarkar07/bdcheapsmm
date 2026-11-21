@@ -223,11 +223,7 @@ export function ProfileSettings({ user }: { user: Profile }) {
                     <FormItem>
                       <FormLabel>Currency</FormLabel>
                       <FormControl>
-                        <select className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" {...field}>
-                          <option value="BDT">BDT (৳)</option>
-                          <option value="USD">USD ($)</option>
-                          <option value="INR">INR (₹)</option>
-                        </select>
+                        <Input {...field} readOnly aria-label="Wallet currency" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

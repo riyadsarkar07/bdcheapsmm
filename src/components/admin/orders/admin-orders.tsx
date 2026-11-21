@@ -37,7 +37,7 @@ import {
   refillOrderAction,
   retryOrderAction,
 } from "@/lib/actions/orders";
-import { formatUsd, formatDateTime, truncate } from "@/lib/utils";
+import { formatCurrency, formatUsd, formatDateTime, truncate } from "@/lib/utils";
 import type { OrderStatus } from "@/lib/types/database";
 import type { OrderProfit } from "@/lib/order-profit";
 
@@ -243,7 +243,7 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                         <span className="line-clamp-1">{truncate(order.services?.name ?? "—", 30)}</span>
                       </td>
                       <td className="px-4 py-3 text-right">{order.quantity.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right font-medium">{formatUsd(order.price)}</td>
+                      <td className="px-4 py-3 text-right font-medium">{formatCurrency(order.price, order.currency)}</td>
                       <td className="px-4 py-3 text-right">
                         {order.profit.providerCost == null ? (
                           <span className="text-muted-foreground">N/A</span>
@@ -374,7 +374,7 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
                     <span>Qty <span className="font-medium text-foreground tabular-nums">{order.quantity.toLocaleString()}</span></span>
-                    <span>Price <span className="font-medium text-foreground tabular-nums">{formatUsd(order.price)}</span></span>
+                    <span>Price <span className="font-medium text-foreground tabular-nums">{formatCurrency(order.price, order.currency)}</span></span>
                     <span className={order.profit.profit == null ? "" : order.profit.profit < 0 ? "text-destructive" : "text-success"}>
                       P/L {order.profit.profit == null ? "N/A" : formatUsd(order.profit.profit, 4)}
                     </span>
@@ -444,7 +444,7 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                 </div>
                 <div className="rounded-lg bg-muted/50 p-3">
                   <p className="text-xs text-muted-foreground">Amount</p>
-                  <p className="font-medium">{formatUsd(retryTarget.price)}</p>
+                  <p className="font-medium">{formatCurrency(retryTarget.price, retryTarget.currency)}</p>
                 </div>
               </div>
 

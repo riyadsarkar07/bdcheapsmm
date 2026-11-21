@@ -14,20 +14,15 @@ import type { OrderStatus } from "@/lib/types/database";
  *  - GitHub Actions workflow .github/workflows/order-status-poll.yml (every 10 minutes)
  *  - Vercel Cron (vercel.json) as a daily fallback
  *
- * Auth: accepts `Authorization: Bearer <CRON_SECRET>` (external schedulers) or
- * Vercel's own cron invocations (identified by the `vercel-cron/1.0` user agent,
- * which carry no Authorization header).
+ * Auth: requires the configured scheduler bearer secret.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  const userAgent = request.headers.get("user-agent") ?? "";
-  const isVercelCron =
-    userAgent.startsWith("vercel-cron/") || request.headers.get("x-vercel-cron-schedule") !== null;
-  if (process.env.CRON_SECRET && !isVercelCron && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -45,6 +40,7 @@ export async function GET(request: Request) {
 
   const providerCache = new Map<string, { id: string; name: string; api_url: string; api_key: string }>();
   let updated = 0;
+  let failed = 0;
 
   for (const order of orders) {
     if (!order.provider_id || !order.provider_order_id) continue;
@@ -83,19 +79,24 @@ export async function GET(request: Request) {
         counts.start_count !== (order.start_count ?? null) ||
         counts.remain !== (order.remain ?? null);
 
-      if (isTerminal || statusChanged || countsChanged) {
-        await supabase.from("orders").update({
+      if (status === "refunded" || status === "cancelled") {
+        const refund = await supabase.rpc("refund_order", { p_order_id: order.id, p_refunded_by: null });
+        if (refund.error) throw refund.error;
+        updated++;
+      } else if (isTerminal || statusChanged || countsChanged) {
+        const write = await supabase.from("orders").update({
           status,
           start_count: counts.start_count,
           remain: counts.remain,
           ...(isTerminal ? { provider_response: result as never } : {}),
-        }).eq("id", order.id);
-        updated++;
+        }).eq("id", order.id).eq("status", order.status).select("id").maybeSingle();
+        if (write.error) throw write.error;
+        if (write.data) updated++;
       }
     } catch {
-      // Skip transient provider errors
+      failed++;
     }
   }
 
-  return NextResponse.json({ ok: true, checked: orders.length, updated });
+  return NextResponse.json({ ok: failed === 0, checked: orders.length, updated, failed }, { status: failed ? 502 : 200 });
 }

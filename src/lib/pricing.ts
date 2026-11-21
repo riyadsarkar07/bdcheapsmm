@@ -105,6 +105,19 @@ export function computeProviderCost(pricePer1000: number, quantity: number): num
   return minorToUsd(minor);
 }
 
+export const BDT_PER_USD = 126;
+export function priceInUsd(price: number, currency: string): number | null {
+  if (currency === "USD") return price;
+  if (currency === "BDT") return price / BDT_PER_USD;
+  return null;
+}
+
+export function walletCharge(usd: number, currency: string): number {
+  if (currency === "USD") return round2(usd);
+  if (currency === "BDT") return round2(usd * BDT_PER_USD);
+  return NaN;
+}
+
 export function formatChargeUsd(amount: number): string {
   const value = Number(amount);
   if (!Number.isFinite(value)) return "$0.00";
@@ -133,6 +146,7 @@ export function parseChargeError(message: string | null | undefined): {
 }
 
 export function hasSufficientBalance(balance: number, charge: number): boolean {
+  if (!Number.isFinite(Number(balance)) || !Number.isFinite(Number(charge))) return false;
   const wallet = round2(Number(balance));
   const cost = round2(Number(charge));
   if (!Number.isFinite(wallet) || !Number.isFinite(cost)) return false;

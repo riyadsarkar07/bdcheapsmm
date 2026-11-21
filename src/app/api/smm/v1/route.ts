@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { computeOrderCharge, hasSufficientBalance, insufficientBalanceMessage, parseChargeError } from "@/lib/pricing";
+import { parseChargeError } from "@/lib/pricing";
 import { assertOrderPricingSafety } from "@/lib/pricing-safety";
 import { createHash } from "crypto";
 
@@ -94,13 +94,10 @@ export async function POST(request: Request) {
     .single();
   if (!provider) return NextResponse.json({ error: "Provider not configured" }, { status: 500 });
 
-  const price = computeOrderCharge(service.price, qty);
-  if (!(price > 0)) {
-    return NextResponse.json(
-      { error: "This service cannot be ordered at this quantity because the calculated cost is $0.00." },
-      { status: 400 }
-    );
-  }
+  const code = typeof coupon === "string" ? coupon.trim() : "";
+  const quote = await supabase.rpc("order_quote_usd", { p_user_id: profile.id, p_service_id: service.id, p_quantity: qty, p_coupon: code });
+  if (quote.error || quote.data == null) return NextResponse.json({ error: quote.error?.message ?? "Invalid quote" }, { status: 400 });
+  const price = quote.data;
 
   const pricingCheck = await assertOrderPricingSafety({
     provider,
@@ -114,13 +111,6 @@ export async function POST(request: Request) {
   }
   const providerCost = pricingCheck.providerCost;
 
-  if (Number(profile.balance) <= 0 || !hasSufficientBalance(profile.balance, price)) {
-    return NextResponse.json(
-      { error: insufficientBalanceMessage(price, profile.balance) },
-      { status: 402 }
-    );
-  }
-
   const orderNumber = `SMM${new Date().getFullYear().toString().slice(2)}${Math.floor(100000 + Math.random() * 900000)}`;
 
   const { data: order, error: orderError } = await supabase.rpc("create_and_charge_order", {
@@ -131,14 +121,15 @@ export async function POST(request: Request) {
     p_link: String(link),
     p_quantity: qty,
     p_price: price,
-    p_currency: profile.currency,
+    p_coupon: code,
+    p_cost: providerCost,
   });
 
   if (orderError || !order) {
     const parsed = parseChargeError(orderError?.message);
     if (parsed.insufficient) {
       return NextResponse.json(
-        { error: insufficientBalanceMessage(parsed.required ?? price, parsed.current ?? profile.balance) },
+        { error: `Insufficient balance. Required: ${parsed.required} ${profile.currency}` },
         { status: 402 }
       );
     }

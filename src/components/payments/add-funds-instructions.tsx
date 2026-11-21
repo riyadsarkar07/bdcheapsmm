@@ -54,8 +54,8 @@ export function AddFundsInstructions() {
         </div>
       </div>
       <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
-        <p className="text-sm font-semibold">USD Rate: 1 USD = 127 BDT</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">ডলার রেট: ১ USD = ১২৭ টাকা</p>
+        <p className="text-sm font-semibold">USD Rate: 1 USD = 126 BDT</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">ডলার রেট: ১ USD = ১২৬ টাকা</p>
       </div>
     </div>
   );

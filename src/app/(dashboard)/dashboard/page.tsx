@@ -26,7 +26,7 @@ import {
   Headphones,
   Megaphone,
 } from "lucide-react";
-import { formatUsd, formatDateTime, truncate } from "@/lib/utils";
+import { formatCurrency, formatDateTime, truncate } from "@/lib/utils";
 import type { OrderStatus, TransactionType } from "@/lib/types/database";
 
 export const revalidate = 0;
@@ -256,7 +256,7 @@ export default async function DashboardPage() {
           />
           <StatCard
             title="Total Spent"
-            value={<AnimatedNumber value={totalSpent} format="usd" />}
+            value={<AnimatedNumber value={totalSpent} format="currency" currency={user.currency} />}
             icon={<TrendingUp className="h-5 w-5" />}
             color="primary"
           />
@@ -271,7 +271,7 @@ export default async function DashboardPage() {
               <CardTitle className="text-base">Spending — last 7 days</CardTitle>
               <p className="mt-1 text-xs text-muted-foreground">
                 Total this week:{" "}
-                <span className="font-semibold text-foreground">{formatUsd(weekTotal)}</span>
+                <span className="font-semibold text-foreground">{formatCurrency(weekTotal, user.currency)}</span>
               </p>
             </div>
             <Badge variant="subtle" className="hidden sm:inline-flex">
@@ -279,7 +279,7 @@ export default async function DashboardPage() {
             </Badge>
           </CardHeader>
           <CardContent>
-            <MiniAreaChart data={chartData} height={180} valueFormat="usd" />
+            <MiniAreaChart data={chartData} height={180} currency={user.currency} />
           </CardContent>
         </Card>
 
@@ -372,7 +372,7 @@ export default async function DashboardPage() {
                         }`}
                       >
                         {positive ? "+" : "−"}
-                        {formatUsd(Math.abs(Number(tx.amount)))}
+                        {formatCurrency(Math.abs(Number(tx.amount)), tx.currency)}
                       </span>
                     </li>
                   );
@@ -474,7 +474,7 @@ export default async function DashboardPage() {
                           <span className="line-clamp-1">{truncate(order.services?.name ?? "Service", 40)}</span>
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">{order.quantity.toLocaleString()}</td>
-                        <td className="px-4 py-3 text-right font-medium tabular-nums">{formatUsd(order.price)}</td>
+                        <td className="px-4 py-3 text-right font-medium tabular-nums">{formatCurrency(order.price, order.currency)}</td>
                         <td className="px-4 py-3">
                           <OrderStatusBadge status={order.status as OrderStatus} />
                         </td>
@@ -500,7 +500,7 @@ export default async function DashboardPage() {
                       <p className="mt-1 line-clamp-1 text-sm">{truncate(order.services?.name ?? "Service", 48)}</p>
                       <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
                         <span className="tabular-nums">
-                          {order.quantity.toLocaleString()} units · {formatUsd(order.price)}
+                          {order.quantity.toLocaleString()} units · {formatCurrency(order.price, order.currency)}
                         </span>
                         <span>{formatDateTime(order.created_at, "MMM d, h:mm a")}</span>
                       </div>

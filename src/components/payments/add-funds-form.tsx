@@ -32,6 +32,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { createClient } from "@/lib/supabase/client";
 import { submitPaymentAction } from "@/lib/actions/payments";
 import type { PaymentSettings } from "@/lib/types/app";
 import { BKashLogo, NagadLogo, RocketLogo } from "./brand-logos";
@@ -57,19 +58,22 @@ const allMethods = [
 
 export function AddFundsForm({
   payments,
-  currency,
+  userId,
 }: {
   payments: PaymentSettings;
-  currency: string;
+  userId: string;
 }) {
   const router = useRouter();
   const [loading, setLoading] = React.useState(false);
-  const [screenshot, setScreenshot] = React.useState<{
-    data: string;
-    type: string;
-    size: number;
-  } | null>(null);
+  const [screenshot, setScreenshot] = React.useState<File | null>(null);
   const [preview, setPreview] = React.useState<string | null>(null);
+  const uploadedProof = React.useRef<{ file: File; path: string } | null>(null);
+  React.useEffect(() => {
+    if (!screenshot) { setPreview(null); return; }
+    const url = URL.createObjectURL(screenshot);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [screenshot]);
   const fileRef = React.useRef<HTMLInputElement>(null);
 
   const enabledKeys = new Set(
@@ -130,13 +134,7 @@ export function AddFundsForm({
       toast.error("Screenshot must be an image (PNG, JPEG, WEBP, GIF).");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const data = reader.result as string;
-      setScreenshot({ data, type: file.type, size: file.size });
-      setPreview(data);
-    };
-    reader.readAsDataURL(file);
+    setScreenshot(file);
   }
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -146,15 +144,19 @@ export function AddFundsForm({
     }
     setLoading(true);
     try {
+      if (uploadedProof.current?.file !== screenshot) {
+        const path = `${userId}/${crypto.randomUUID()}.${screenshot.type.split("/")[1]}`;
+        const upload = await createClient().storage.from("payment-proofs").upload(path, screenshot);
+        if (upload.error) { toast.error("Screenshot upload failed. Please try again."); return; }
+        uploadedProof.current = { file: screenshot, path };
+      }
       const result = await submitPaymentAction({
         method: values.method,
         senderNumber: values.senderNumber,
         amount: values.amount,
         transactionId: values.transactionId,
         note: values.note,
-        screenshot: screenshot.data,
-        screenshotType: screenshot.type,
-        screenshotSize: screenshot.size,
+        screenshotPath: uploadedProof.current.path,
       });
       if (result.success) {
         toast.success("Payment request submitted! Awaiting approval.");
@@ -165,6 +167,8 @@ export function AddFundsForm({
       } else {
         toast.error(result.error ?? "Failed to submit payment request");
       }
+    } catch {
+      toast.error("Could not submit payment. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -301,7 +305,7 @@ export function AddFundsForm({
             name="amount"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Amount ({currency})</FormLabel>
+                <FormLabel>Amount (BDT)</FormLabel>
                 <FormControl>
                   <Input type="number" min={1} placeholder="500" {...field} />
                 </FormControl>

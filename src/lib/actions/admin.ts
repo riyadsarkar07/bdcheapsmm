@@ -19,7 +19,9 @@ import { fail, ok, requireAdmin, type ActionResult } from "@/lib/guards";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { providerApi, parseServiceType, parseProviderRate, normalizeProviderServiceId } from "@/lib/provider/smmfollow";
 import { probeProvider, recordProviderHealth, deriveHealth } from "@/lib/provider-health";
-import { slugify, formatUsd } from "@/lib/utils";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { priceInUsd } from "@/lib/pricing";
+import { slugify, formatCurrency } from "@/lib/utils";
 import { writeLog } from "@/lib/audit";
 import { createNotification, notifyAllAdmins } from "@/lib/notify";
 import { getSetting, setSetting } from "@/lib/settings";
@@ -887,7 +889,10 @@ export async function adminUpdateOrderStatusAction(orderId: string, status: stri
   const { data: order } = await supabase.from("orders").select("user_id, order_number").eq("id", orderId).single();
   if (!order) return fail("Order not found.");
 
-  await supabase.from("orders").update({ status: status as OrderStatus }).eq("id", orderId);
+  if (status === "refunded") return adminRefundOrderAction(orderId);
+  const write = await supabase.from("orders").update({ status: status as OrderStatus })
+    .eq("id", orderId).neq("status", "refunded").select("id").maybeSingle();
+  if (write.error || !write.data) return fail("Order is refunded or could not be updated.");
   await writeLog({ userId: user.id, action: "update", entityType: "orders", entityId: orderId, description: `Set order #${order.order_number} to ${status}` });
   return ok(undefined, "Order status updated.");
 }
@@ -900,7 +905,7 @@ export async function adminRefundOrderAction(orderId: string): Promise<ActionRes
   const { data: order } = await supabase.from("orders").select("id, user_id, price, currency, order_number, status").eq("id", orderId).single();
   if (!order) return fail("Order not found.");
 
-  const { error: refundError } = await supabase.rpc("refund_order", {
+  const { error: refundError } = await createAdminClient().rpc("refund_order", {
     p_order_id: orderId,
     p_refunded_by: user.id,
   });
@@ -910,7 +915,7 @@ export async function adminRefundOrderAction(orderId: string): Promise<ActionRes
     userId: order.user_id,
     type: "order_cancelled",
     title: "Order refunded",
-    body: `Order #${order.order_number} was refunded ${formatUsd(order.price)}.`,
+    body: `Order #${order.order_number} was refunded ${formatCurrency(order.price, order.currency)}.`,
     link: `/orders/${order.id}`,
   });
   await writeLog({ userId: user.id, action: "update", entityType: "orders", entityId: orderId, description: `Refunded order #${order.order_number}` });
@@ -924,7 +929,7 @@ export async function adminBulkRetryFailedOrdersAction(): Promise<ActionResult<{
   const supabase = await createClient();
   const { data: failedOrders } = await supabase
     .from("orders")
-    .select("id, provider_id, link, quantity, price, order_number, services(provider_service_id, provider_price)")
+    .select("id, provider_id, link, quantity, price, currency, order_number, services(provider_service_id, provider_price)")
     .in("status", ["failed", "rejected"]);
 
   let retried = 0;
@@ -937,7 +942,7 @@ export async function adminBulkRetryFailedOrdersAction(): Promise<ActionResult<{
       providerServiceId: order.services.provider_service_id,
       storedProviderPrice: order.services.provider_price,
       quantity: order.quantity,
-      sellingPrice: Number(order.price),
+      sellingPrice: priceInUsd(order.price, order.currency) ?? 0,
     });
     if (!pricingCheck.ok) continue;
     try {
