@@ -17,10 +17,7 @@ export async function submitPaymentAction(input: {
   amount: number;
   transactionId: string;
   note?: string;
-  screenshot?: string;
-  screenshotName?: string;
-  screenshotType?: string;
-  screenshotSize?: number;
+  screenshotPath: string;
 }): Promise<ActionResult> {
   const headerStore = await headers();
   const ip = getClientIp(headerStore);
@@ -41,44 +38,28 @@ export async function submitPaymentAction(input: {
   const { createClient } = await import("@/lib/supabase/server");
   const supabase = await createClient();
 
-  let screenshotUrl: string | null = null;
-
-  if (input.screenshot) {
-    if (input.screenshotSize && input.screenshotSize > MAX_SIZE) {
-      return fail("Screenshot must be smaller than 5MB.");
-    }
-    if (input.screenshotType && !ALLOWED_TYPES.has(input.screenshotType)) {
-      return fail("Screenshot must be PNG, JPEG, WEBP or GIF.");
-    }
-    const base64 = input.screenshot.replace(/^data:.*?;base64,/, "");
-    const buffer = Buffer.from(base64, "base64");
-    if (buffer.byteLength > MAX_SIZE) {
-      return fail("Screenshot must be smaller than 5MB.");
-    }
-    const ext = (input.screenshotType ?? "image/png").split("/")[1] ?? "png";
-    const fileName = `${user.id}-${Date.now()}.${ext}`;
-    const { data: uploaded, error: uploadError } = await supabase.storage
-      .from(BUCKET)
-      .upload(`payments/${fileName}`, buffer, {
-        contentType: input.screenshotType ?? "image/png",
-        upsert: false,
-      });
-    if (uploadError || !uploaded) {
-      return fail("Failed to upload screenshot. Please try again.");
-    }
-    // Store the object path (bucket is private). Signed URLs are resolved
-    // server-side when the payment request is displayed.
-    screenshotUrl = uploaded.path;
+  if (!["BDT", "USD"].includes(user.currency)) return fail("No BDT exchange rate is configured for this wallet.");
+  const screenshotUrl = input.screenshotPath;
+  const [owner, file, ...rest] = (screenshotUrl ?? "").split("/");
+  if (owner !== user.id || rest.length || !/^[a-f0-9-]{36}\.(png|jpeg|gif|webp)$/.test(file ?? "")) {
+    return fail("Upload a valid payment screenshot.");
+  }
+  const proof = await supabase.storage.from(BUCKET).info(screenshotUrl);
+  const size = Number(proof.data?.size ?? proof.data?.metadata?.size);
+  const mime = proof.data?.contentType ?? proof.data?.metadata?.mimetype;
+  if (proof.error || !size || size > MAX_SIZE || !ALLOWED_TYPES.has(String(mime))) {
+    return fail("Payment screenshot is missing or invalid.");
   }
 
   const { data: payment, error: insertError } = await supabase
     .from("payment_requests")
     .insert({
+      id: file.split(".")[0],
       user_id: user.id,
       method: parsed.data.method,
       sender_number: parsed.data.senderNumber,
       amount: parsed.data.amount,
-      currency: user.currency,
+      currency: "BDT",
       transaction_id: parsed.data.transactionId,
       screenshot_url: screenshotUrl,
       note: parsed.data.note || null,
@@ -87,6 +68,13 @@ export async function submitPaymentAction(input: {
     .select("*")
     .single();
 
+  if (insertError?.code === "23505") {
+    const existing = await supabase.from("payment_requests").select("id")
+      .eq("id", file.split(".")[0]).eq("user_id", user.id)
+      .eq("transaction_id", parsed.data.transactionId).eq("amount", parsed.data.amount)
+      .eq("method", parsed.data.method).eq("sender_number", parsed.data.senderNumber).maybeSingle();
+    if (existing.data) return ok(undefined, "Payment request already submitted.");
+  }
   if (insertError || !payment) {
     return fail(
       insertError

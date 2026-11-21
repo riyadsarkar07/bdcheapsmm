@@ -40,9 +40,11 @@ Setup requirements:
 
 - **GitHub Actions secret** — add `CRON_SECRET` (the same value as the Vercel env var) as a repository secret, otherwise the poller fails with a clear error.
 - **Repository variable** (optional) — set `PROD_BASE_URL` (with protocol, e.g. `https://your-app.vercel.app`) if the production domain differs from the workflow default.
-- **Endpoint auth** — the route accepts `Authorization: Bearer <CRON_SECRET>` from external schedulers, and also accepts Vercel's own cron invocations (user agent `vercel-cron/1.0`, which carry no Authorization header). This is required because Vercel cron requests do not include custom headers.
+- Both cron endpoints require the same bearer secret. Set `CRON_SECRET` in Vercel and GitHub Actions. Vercel includes this value in the Authorization header for its scheduled requests.
 
 Because the frequent poller runs off-Vercel, status updates stay automatic on any Vercel plan.
+
+Apply migration `0021_wallet_checkout.sql` to the panel database in the same release window as the checkout update. It changes the charge function signature and the payment-proof upload policy. Orders are quoted in USD, local deposits are entered in BDT, and wallet entries use the account currency at 126 BDT per USD.
 
 ## 5. Auth callback URLs
 

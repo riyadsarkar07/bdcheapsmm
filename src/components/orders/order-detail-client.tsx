@@ -43,7 +43,7 @@ import {
   refillOrderAction,
   retryOrderAction,
 } from "@/lib/actions/orders";
-import { formatUsd, formatDateTime } from "@/lib/utils";
+import { formatCurrency, formatUsd, formatDateTime } from "@/lib/utils";
 import type { Order, OrderStatus } from "@/lib/types/database";
 import type { OrderProfit } from "@/lib/order-profit";
 
@@ -119,7 +119,7 @@ export function OrderDetailClient({
           name === "refresh"
             ? "Status refreshed"
             : name === "cancel"
-              ? "Order cancelled & refunded"
+              ? "Cancellation requested. Awaiting provider confirmation."
               : name === "refill"
                 ? "Refill requested"
                 : "Order retried"
@@ -157,7 +157,7 @@ export function OrderDetailClient({
     { label: "Order Number", value: `#${orderState.order_number}`, copy: orderState.order_number },
     { label: "Service", value: orderState.services?.name ?? "—" },
     { label: "Quantity", value: orderState.quantity.toLocaleString() },
-    { label: "Price", value: formatUsd(orderState.price) },
+    { label: "Price", value: formatCurrency(orderState.price, orderState.currency) },
     { label: "Provider Order ID", value: orderState.provider_order_id ?? "—", copy: orderState.provider_order_id ?? undefined },
     { label: "Provider", value: providerName ?? "—" },
     { label: "Start Count", value: orderState.start_count?.toLocaleString() ?? "—" },
@@ -181,7 +181,7 @@ export function OrderDetailClient({
         </div>
         <div className="flex items-center gap-2">
           <OrderStatusBadge status={orderState.status} />
-          <Badge variant="secondary">{formatUsd(orderState.price)}</Badge>
+          <Badge variant="secondary">{formatCurrency(orderState.price, orderState.currency)}</Badge>
         </div>
       </div>
 
@@ -349,7 +349,7 @@ export function OrderDetailClient({
             <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
                 <dt className="text-xs text-muted-foreground">User Price</dt>
-                <dd className="text-right text-sm font-medium">{formatUsd(profit.customerPrice)}</dd>
+                <dd className="text-right text-sm font-medium">{formatCurrency(orderState.price, orderState.currency)}</dd>
               </div>
               <div className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
                 <dt className="text-xs text-muted-foreground">Provider Cost</dt>
@@ -406,7 +406,7 @@ export function OrderDetailClient({
               </div>
               <div className="rounded-lg bg-muted/50 p-3">
                 <p className="text-xs text-muted-foreground">Price</p>
-                <p className="font-medium">{formatUsd(orderState.price)}</p>
+                <p className="font-medium">{formatCurrency(orderState.price, orderState.currency)}</p>
               </div>
               <div className="rounded-lg bg-muted/50 p-3">
                 <p className="text-xs text-muted-foreground">Status</p>

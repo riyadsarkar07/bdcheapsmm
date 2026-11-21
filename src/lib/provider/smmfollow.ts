@@ -302,14 +302,12 @@ export const providerApi = {
     providerOrderId: string | number
   ): Promise<{ cancelled: boolean; message?: string }> {
     const raw = await post(provider, "cancel", { orders: providerOrderId });
-    if (Array.isArray(raw)) {
-      return raw as unknown as { cancelled: boolean; message?: string };
+    const row = asRecord(Array.isArray(raw) ? raw.find((item) => String(item?.order) === String(providerOrderId)) : raw);
+    const accepted = row.cancel ?? row.cancelled;
+    if (![1, "1", true].includes(accepted as number | string | boolean)) {
+      throw new Error("Provider did not accept cancellation. The order is still active.");
     }
-    const data = asRecord(raw);
-    if (data.cancel === undefined && data.cancelled === undefined) {
-      assertProviderFailed(data, "Cancel failed");
-    }
-    return data as unknown as { cancelled: boolean; message?: string };
+    return { cancelled: true };
   },
 
   async getBalance(
@@ -344,13 +342,13 @@ export function isKnownOrderStatus(status: string): boolean {
 }
 
 export function normalizeProviderStatus(status: string): string {
-  const lower = status.toLowerCase();
+  const lower = status.trim().toLowerCase();
   if (lower.includes("complete")) return "completed";
   if (lower.includes("progress")) return "in_progress";
   if (lower.includes("pending")) return "pending";
   if (lower.includes("partial")) return "partial";
-  if (lower.includes("cancel")) return "cancelled";
-  if (lower.includes("refund")) return "refunded";
+  if (lower === "cancelled" || lower === "canceled") return "cancelled";
+  if (lower === "refunded") return "refunded";
   if (lower.includes("fail")) return "failed";
   if (lower.includes("processing")) return "processing";
   if (lower.includes("reject")) return "rejected";

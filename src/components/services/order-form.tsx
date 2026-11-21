@@ -18,7 +18,6 @@ import {
   ShieldCheck,
   Minus,
   Plus,
-  CheckCircle2,
   Link2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,10 +30,10 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { createOrderAction } from "@/lib/actions/orders";
+import { createOrderAction, quoteCouponAction } from "@/lib/actions/orders";
 import { checkUrlConflictAction, type UrlConflict } from "@/lib/actions/url-check";
-import { formatUsd } from "@/lib/utils";
-import { computeOrderCharge, formatChargeUsd, hasSufficientBalance } from "@/lib/pricing";
+import { formatUsd, formatCurrency } from "@/lib/utils";
+import { computeOrderCharge, walletCharge, hasSufficientBalance } from "@/lib/pricing";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -67,6 +66,7 @@ interface OrderFormProps {
   minQuantity: number;
   maxQuantity: number;
   balance: number;
+  currency: string;
   linkPlaceholder?: string;
   /** Human-readable provider ETA, e.g. "0-1 hours". */
   averageTime?: string | null;
@@ -79,6 +79,7 @@ export function OrderForm({
   minQuantity,
   maxQuantity,
   balance,
+  currency,
   linkPlaceholder,
   averageTime,
 }: OrderFormProps) {
@@ -87,9 +88,7 @@ export function OrderForm({
   const reduced = useReducedMotion();
   const [loading, setLoading] = React.useState(false);
   const submittingRef = React.useRef(false);
-  const [couponStatus, setCouponStatus] = React.useState<
-    "idle" | "applied" | "invalid"
-  >("idle");
+  const [quote, setQuote] = React.useState<{ key: string; price: number } | null>(null);
   const [conflicts, setConflicts] = React.useState<UrlConflict[] | null>(null);
   const [pendingValues, setPendingValues] = React.useState<z.infer<typeof formSchema> | null>(null);
   const [confirmValues, setConfirmValues] = React.useState<z.infer<typeof formSchema> | null>(null);
@@ -101,7 +100,22 @@ export function OrderForm({
 
   const quantity = form.watch("quantity") || 0;
   // pricePerUnit is per 1000 units, so the total is (price/1000) x quantity.
-  const total = computeOrderCharge(pricePerUnit, quantity);
+  const coupon = form.watch("coupon")?.trim() || "";
+  const quoteKey = JSON.stringify([serviceId, quantity, coupon]);
+  const applied = !!coupon && quote?.key === quoteKey;
+  const needsQuote = !!coupon && !applied;
+  const usd = applied ? quote.price : computeOrderCharge(pricePerUnit, quantity);
+  const total = walletCharge(usd, currency);
+  async function applyCoupon() {
+    setLoading(true);
+    try {
+      const result = await quoteCouponAction(serviceId, quantity, coupon);
+      if (result.success && result.data != null) setQuote({ key: quoteKey, price: result.data });
+      else toast.error(result.error ?? "Coupon unavailable");
+    } finally {
+      setLoading(false);
+    }
+  }
   const balanceAfter = Math.max(0, Number(balance) - total);
 
   const presets = React.useMemo(() => {
@@ -113,13 +127,7 @@ export function OrderForm({
   }, [minQuantity, maxQuantity]);
 
   async function placeOrder(values: z.infer<typeof formSchema>) {
-    const cost = computeOrderCharge(pricePerUnit, values.quantity);
-    if (!hasSufficientBalance(balance, cost)) {
-      toast.error(
-        `Insufficient balance. Please add funds to place this order. Required: ${formatChargeUsd(cost)}. Current balance: ${formatChargeUsd(balance)}.`
-      );
-      return;
-    }
+    if (needsQuote || !hasSufficientBalance(balance, total)) return;
     if (submittingRef.current) return;
     submittingRef.current = true;
     setLoading(true);
@@ -129,10 +137,11 @@ export function OrderForm({
         quantity: values.quantity,
         link: values.link,
         coupon: values.coupon,
+        expectedUsd: usd,
       });
       if (result.success && result.data) {
         toast.success(`Order ${result.data.orderNumber} placed successfully!`);
-        setCouponStatus("idle");
+        setQuote(null);
         form.setValue("coupon", "");
         setConflicts(null);
         setPendingValues(null);
@@ -141,6 +150,7 @@ export function OrderForm({
         router.push(`/orders/${result.data.orderId}`);
         router.refresh();
       } else {
+        setQuote(null);
         toast.error(result.error ?? "Failed to place order");
       }
     } finally {
@@ -150,13 +160,7 @@ export function OrderForm({
   }
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    const cost = computeOrderCharge(pricePerUnit, values.quantity);
-    if (!hasSufficientBalance(balance, cost)) {
-      toast.error(
-        `Insufficient balance. Please add funds to place this order. Required: ${formatChargeUsd(cost)}. Current balance: ${formatChargeUsd(balance)}.`
-      );
-      return;
-    }
+    if (needsQuote || !hasSufficientBalance(balance, total)) return;
     if (submittingRef.current) return;
     setLoading(true);
     try {
@@ -308,7 +312,7 @@ export function OrderForm({
                       className="pl-9"
                       onChange={(e) => {
                         field.onChange(e);
-                        setCouponStatus("idle");
+                        setQuote(null);
                       }}
                       value={field.value}
                       onBlur={field.onBlur}
@@ -316,14 +320,11 @@ export function OrderForm({
                     />
                   </div>
                 </FormControl>
-                {couponStatus === "applied" ? (
-                  <p className="flex items-center gap-1 text-xs text-success">
-                    <CheckCircle2 className="h-3 w-3" /> Coupon applied!
-                  </p>
-                ) : null}
-                {couponStatus === "invalid" ? (
-                  <p className="text-xs text-destructive">Invalid coupon</p>
-                ) : null}
+                {coupon && (
+                  <Button type="button" size="sm" variant="outline" disabled={loading || applied} onClick={applyCoupon}>
+                    {applied ? "Coupon applied" : "Apply coupon"}
+                  </Button>
+                )}
                 <FormMessage />
               </FormItem>
             )}
@@ -349,27 +350,27 @@ export function OrderForm({
             <div className="mt-2.5 flex items-center justify-between border-t pt-2.5">
               <span className="font-medium">Total</span>
               <span className="text-xl font-bold text-primary tabular-nums">
-                {formatUsd(total)}
+                {Number.isFinite(total) ? formatCurrency(total, currency) : "Unavailable"}
               </span>
             </div>
             <div className="mt-2 flex items-center justify-between text-xs">
               <span className="text-muted-foreground">Balance after order</span>
               <span className={insufficient ? "font-semibold text-destructive" : "font-semibold text-success"}>
-                {formatUsd(balanceAfter)}
+                {Number.isFinite(balanceAfter) ? formatCurrency(balanceAfter, currency) : "Unavailable"}
               </span>
             </div>
           </div>
 
-          {insufficient ? (
+          {insufficient && !needsQuote ? (
             <div className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                 <div className="space-y-1">
                   <p className="font-semibold text-destructive">
-                    Insufficient balance. Please add funds to place this order.
+                    {Number.isFinite(total) ? "Insufficient balance. Please add funds to place this order." : "No exchange rate is configured for your wallet currency."}
                   </p>
                   <p className="text-muted-foreground">
-                    Required: {formatUsd(total)} · Current balance: {formatUsd(balance)}
+                    Required: {Number.isFinite(total) ? formatCurrency(total, currency) : "Unavailable"} · Current balance: {formatCurrency(balance, currency)}
                   </p>
                 </div>
               </div>
@@ -381,9 +382,9 @@ export function OrderForm({
             </div>
           ) : null}
 
-          <Button type="submit" variant="gradient" className="w-full" disabled={loading || insufficient}>
+          <Button type="submit" variant="gradient" className="w-full" disabled={loading || insufficient || needsQuote}>
             {loading ? <Loader2 className="animate-spin" /> : <Zap />}
-            {insufficient ? "Insufficient Balance" : "Review Order"}
+            {needsQuote ? "Apply coupon to review" : insufficient ? "Insufficient Balance" : "Review Order"}
           </Button>
           <p className="flex items-center justify-center gap-1.5 text-center text-[11px] text-muted-foreground">
             <ShieldCheck className="h-3.5 w-3.5" />
@@ -463,7 +464,7 @@ export function OrderForm({
                 <div className="rounded-lg bg-muted/50 p-3">
                   <p className="text-xs text-muted-foreground">Total charge</p>
                   <p className="mt-0.5 font-semibold text-primary tabular-nums">
-                    {formatUsd(computeOrderCharge(pricePerUnit, confirmValues.quantity))}
+                    {Number.isFinite(total) ? formatCurrency(total, currency) : "Unavailable"}
                   </p>
                 </div>
               </div>

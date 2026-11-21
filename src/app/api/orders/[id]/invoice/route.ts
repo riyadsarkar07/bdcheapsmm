@@ -45,6 +45,7 @@ export async function GET(
       link: order.link,
       quantity: order.quantity,
       price: order.price,
+      currency: order.currency,
       status: order.status,
       provider_order_id: order.provider_order_id,
       created_at: order.created_at,

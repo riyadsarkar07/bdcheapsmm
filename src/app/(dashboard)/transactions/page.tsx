@@ -5,7 +5,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TransactionTypeBadge } from "@/components/status-badges";
-import { formatCurrency, formatUsd, formatDateTime } from "@/lib/utils";
+import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { FileDown, History, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import type { TransactionType } from "@/lib/types/database";
 
@@ -45,7 +45,7 @@ export default async function TransactionsPage() {
     },
     {
       label: "Total Spent",
-      value: formatUsd(spent),
+      value: formatCurrency(spent, user.currency),
       icon: TrendingDown,
       tone: "text-destructive",
       bg: "bg-destructive/10",

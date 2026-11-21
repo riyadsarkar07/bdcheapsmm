@@ -4,10 +4,10 @@ import { headers } from "next/headers";
 import { createOrderSchema, retryOrderSchema } from "@/lib/validations";
 import { fail, ok, requireUser, isAdminProfile, type ActionResult } from "@/lib/guards";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
-import { generateOrderNumber, formatUsd } from "@/lib/utils";
+import { generateOrderNumber, formatCurrency } from "@/lib/utils";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { providerApi } from "@/lib/provider/smmfollow";
-import { computeOrderCharge, hasSufficientBalance, insufficientBalanceMessage, parseChargeError, round2 } from "@/lib/pricing";
+import { parseChargeError } from "@/lib/pricing";
 import { assertOrderPricingSafety } from "@/lib/pricing-safety";
 import { writeLog } from "@/lib/audit";
 import { createNotification } from "@/lib/notify";
@@ -32,6 +32,7 @@ async function updateOrderVerified(
       .from("orders")
       .update(updates)
       .eq("id", orderId)
+      .neq("status", "refunded")
       .select("id")
       .maybeSingle();
     if (res.error) return { ok: false, error: res.error };
@@ -47,6 +48,7 @@ export async function createOrderAction(input: {
   quantity: number;
   link: string;
   coupon?: string;
+  expectedUsd?: number;
 }): Promise<ActionResult<{ orderId: string; orderNumber: string }>> {
   const headerStore = await headers();
   const ip = getClientIp(headerStore);
@@ -71,6 +73,7 @@ export async function createOrderAction(input: {
     quantity: parsed.data.quantity,
     link: parsed.data.link,
     coupon: parsed.data.coupon,
+    expectedUsd: input.expectedUsd,
     ip,
     userAgent: headerStore.get("user-agent"),
   });
@@ -92,6 +95,7 @@ async function placeOrder({
   quantity,
   link,
   coupon,
+  expectedUsd,
   ip,
   userAgent,
 }: {
@@ -100,6 +104,7 @@ async function placeOrder({
   quantity: number;
   link: string;
   coupon?: string;
+  expectedUsd?: number;
   ip?: string | null;
   userAgent?: string | null;
 }): Promise<ActionResult<{ orderId: string; orderNumber: string }>> {
@@ -129,37 +134,13 @@ async function placeOrder({
     );
   }
 
-  // `services.price` is the retail price per 1000 units (same as the provider
-  // rate + markup), so the charge is (price/1000) x quantity - never price x quantity.
-  let price = computeOrderCharge(service.price, qty);
-  if (!(price > 0)) {
-    return fail("This service cannot be ordered at this quantity because the calculated cost is $0.00.");
-  }
-  let couponDiscount = 0;
-
-  // Optional coupon
-  if (coupon && coupon.trim().length > 0) {
-    const { data: couponRecord, error: couponError } = await supabase.rpc("get_coupon", {
-      p_code: coupon.trim(),
-    });
-    if (couponError || !couponRecord) {
-      return fail("Invalid or expired coupon.");
-    }
-    if (couponRecord.min_amount && price < couponRecord.min_amount) {
-      return fail(`Coupon requires a minimum order of ${couponRecord.min_amount} ${user.currency}.`);
-    }
-    const perUserUsed = await checkCouponUsage(user.id, couponRecord.id);
-    if (perUserUsed >= (couponRecord.per_user_limit ?? 1)) {
-      return fail("Coupon usage limit reached for your account.");
-    }
-    if (couponRecord.discount_type === "percent") {
-      couponDiscount = round2((price * couponRecord.discount_value) / 100);
-      if (couponRecord.max_discount) couponDiscount = Math.min(couponDiscount, couponRecord.max_discount);
-    } else {
-      couponDiscount = Math.min(couponRecord.discount_value, price);
-    }
-    price = round2(Math.max(price - couponDiscount, 0));
-  }
+  const admin = createAdminClient();
+  const quote = await admin.rpc("order_quote_usd", {
+    p_user_id: user.id, p_service_id: service.id, p_quantity: qty, p_coupon: coupon?.trim() || "",
+  });
+  if (quote.error || quote.data == null) return fail(quote.error?.message ?? "Unable to quote order.");
+  const price = quote.data;
+  if (expectedUsd !== undefined && expectedUsd !== price) return fail("Price changed. Review your order again.");
 
   let providerRecord: { id: string; name: string; api_url: string; api_key: string; status: string } | null = null;
   try {
@@ -186,24 +167,11 @@ async function placeOrder({
   }
   const providerCost = pricingCheck.providerCost;
 
-  const { data: liveProfile } = await supabase
-    .from("profiles")
-    .select("balance, currency, status")
-    .eq("id", user.id)
-    .maybeSingle();
-  const currentBalance = Number(liveProfile?.balance ?? user.balance ?? 0);
-  if (liveProfile?.status && liveProfile.status !== "active") {
-    return fail("Your account has been suspended.");
-  }
-  if (currentBalance <= 0 || (price > 0 && !hasSufficientBalance(currentBalance, price))) {
-    return fail(insufficientBalanceMessage(price, currentBalance));
-  }
-
   const orderNumber = generateOrderNumber();
 
   // Charge the wallet and insert the order in one DB transaction. If the
   // locked profile cannot cover `price`, no order row is created.
-  const { data: order, error: orderError } = await supabase.rpc("create_and_charge_order", {
+  const { data: order, error: orderError } = await admin.rpc("create_and_charge_order", {
     p_user_id: user.id,
     p_order_number: orderNumber,
     p_service_id: service.id,
@@ -211,49 +179,18 @@ async function placeOrder({
     p_link: link,
     p_quantity: qty,
     p_price: price,
-    p_currency: user.currency,
+    p_coupon: coupon?.trim() || "",
+    p_cost: providerCost,
   });
 
   if (orderError || !order) {
     const parsed = parseChargeError(orderError?.message);
     if (parsed.insufficient) {
       return fail(
-        insufficientBalanceMessage(parsed.required ?? price, parsed.current ?? currentBalance)
+        `Insufficient balance. Required: ${formatCurrency(parsed.required, user.currency)}.`
       );
     }
     return fail(orderError?.message ?? "Failed to create order. Please try again.");
-  }
-
-  // Record actual provider cost immediately so admin profit never treats the
-  // orders.charge default of 0 as a $0.00 cost. This write happens before the
-  // provider is contacted and is retried with the service-role client.
-  const costWrite = await updateOrderVerified(supabase, order.id, { charge: providerCost });
-  if (!costWrite.ok) {
-    await updateOrderVerified(createAdminClient(), order.id, { charge: providerCost });
-  }
-
-  // 2b. Record coupon usage so usage limits are enforced. Best-effort: a
-  // bookkeeping failure here must not abort the order after the charge has
-  // been applied, which would leave the order stuck in "pending".
-  if (couponDiscount > 0 && coupon) {
-    try {
-      const { data: couponRecord } = await supabase
-        .from("coupons")
-        .select("id")
-        .eq("code", coupon.trim())
-        .maybeSingle();
-      if (couponRecord) {
-        await supabase.rpc("use_coupon", {
-          p_user_id: user.id,
-          p_coupon_id: couponRecord.id,
-          p_balance_after: currentBalance - price,
-          p_currency: user.currency,
-          p_description: `Coupon discount applied (${coupon.trim()})`,
-        });
-      }
-    } catch {
-      // Non-fatal: coupon usage tracking failed, order still proceeds.
-    }
   }
 
   // 3. Submit to provider only after the pricing safety check passed and the
@@ -290,13 +227,7 @@ async function placeOrder({
     providerResponse = { error: (err as Error).message };
   }
 
-  // 4. Persist the provider reference atomically with the status. The
-  // user-scoped client can fail an update OR silently match 0 rows (RLS
-  // filtering returns 200 with no error), so every write is verified to have
-  // actually changed the row. On failure or no-op, retry with the service-role
-  // client, which bypasses RLS and is the authoritative writer. This guarantees
-  // an order the provider accepted is never left stuck in "pending" without
-  // its provider_order_id.
+  // Persist provider acceptance and status together. Retry transient database failures once.
   const updates = {
     provider_order_id: providerOrderId,
     provider_id: service.provider_id,
@@ -306,7 +237,7 @@ async function placeOrder({
     error_message: status === "failed" ? String((providerResponse as { error?: string })?.error ?? "Unknown error") : null,
   };
   let updateError: { message: string } | null = null;
-  const firstWrite = await updateOrderVerified(supabase, order.id, updates);
+  const firstWrite = await updateOrderVerified(admin, order.id, updates);
   if (!firstWrite.ok) {
     const firstError = firstWrite.error?.message ?? "Order update failed.";
     updateError = { message: firstError };
@@ -369,16 +300,13 @@ async function placeOrder({
   );
 }
 
-async function checkCouponUsage(userId: string, couponId: string): Promise<number> {
-  const { createClient } = await import("@/lib/supabase/server");
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("transactions")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("reference_type", "coupon")
-    .eq("reference_id", couponId);
-  return data?.length ?? 0;
+export async function quoteCouponAction(serviceId: string, quantity: number, coupon: string): Promise<ActionResult<number>> {
+  const { user } = await requireUser();
+  if (!user) return fail("Sign in to apply a coupon.");
+  const { data, error } = await createAdminClient().rpc("order_quote_usd", {
+    p_user_id: user.id, p_service_id: serviceId, p_quantity: quantity, p_coupon: coupon,
+  });
+  return error || data == null ? fail(error?.message ?? "Coupon unavailable.") : ok(data);
 }
 
 export async function cancelOrderAction(orderId: string): Promise<ActionResult> {
@@ -399,63 +327,16 @@ export async function cancelOrderAction(orderId: string): Promise<ActionResult> 
   if (!["pending", "processing", "in_progress"].includes(order.status)) {
     return fail("This order cannot be cancelled.");
   }
-  if (!order.provider_order_id) {
-    // Not yet submitted: mark cancelled then refund atomically
-    await supabase.from("orders").update({ status: "cancelled" }).eq("id", orderId);
-    await supabase.rpc("refund_order", { p_order_id: orderId, p_refunded_by: user.id });
-    await createNotification({
-      userId: user.id,
-      type: "order_cancelled",
-      title: "Order cancelled",
-      body: `Order #${order.order_number} was cancelled. ${formatUsd(order.price)} refunded.`,
-      link: `/orders/${order.id}`,
-    });
-    return ok(undefined, "Order cancelled and refunded.");
+  if (!order.provider_order_id || !order.provider_id) return fail("Provider submission is pending. Please check again shortly.");
+  const { data: provider } = await createAdminClient().from("providers")
+    .select("id, name, api_url, api_key").eq("id", order.provider_id).single();
+  if (!provider) return fail("Provider unavailable. Please try again later.");
+  try {
+    await providerApi.cancel(provider, order.provider_order_id);
+    return ok(undefined, "Cancellation requested. Your wallet will be credited once the provider confirms.");
+  } catch (err) {
+    return fail((err as Error).message);
   }
-
-  let provider: { id: string; name: string; api_url: string; api_key: string } | null = null;
-  if (order.provider_id) {
-    const { data: p } = await createAdminClient()
-      .from("providers")
-      .select("id, name, api_url, api_key")
-      .eq("id", order.provider_id)
-      .single();
-    provider = p;
-  }
-
-  if (provider) {
-    try {
-      await providerApi.cancel(provider, order.provider_order_id);
-    } catch {
-      // Best-effort cancellation
-    }
-  }
-
-  await supabase.from("orders").update({ status: "cancelled" }).eq("id", orderId);
-  const { error: refundError } = await supabase.rpc("refund_order", {
-    p_order_id: orderId,
-    p_refunded_by: user.id,
-  });
-
-  await createNotification({
-    userId: user.id,
-    type: "order_cancelled",
-    title: "Order cancelled",
-    body: refundError
-      ? `Order #${order.order_number} was cancelled but refund failed: ${refundError.message}. Contact support.`
-      : `Order #${order.order_number} was cancelled. ${formatUsd(order.price)} refunded.`,
-    link: `/orders/${order.id}`,
-  });
-
-  await writeLog({
-    userId: user.id,
-    action: "order_cancel",
-    entityType: "orders",
-    entityId: order.id,
-    description: `Cancelled order #${order.order_number}`,
-  });
-
-  return ok(undefined, "Order cancelled and refunded.");
 }
 
 export async function refreshOrderStatusAction(
@@ -505,15 +386,15 @@ export async function refreshOrderStatusAction(
       remain: counts.remain,
       provider_response: result as never,
     };
-    const firstWrite = await updateOrderVerified(supabase, orderId, updates);
-    if (!firstWrite.ok) {
-      const retryWrite = await updateOrderVerified(createAdminClient(), orderId, updates);
-      if (!retryWrite.ok) {
-        return fail(
-          `Provider reported "${result.status}" but saving it failed: ${retryWrite.error?.message ?? "unknown error"}`
-        );
-      }
+    const admin = createAdminClient();
+    if (status === "cancelled" || status === "refunded") {
+      const result = await admin.rpc("refund_order", { p_order_id: orderId, p_refunded_by: user.id });
+      if (result.error) return fail(result.error.message);
+      return ok({ status: "refunded", start_count: order.start_count, remain: order.remain });
     }
+    const write = await admin.from("orders").update(updates).eq("id", orderId)
+      .eq("status", order.status).neq("status", "refunded").select("id").maybeSingle();
+    if (write.error || !write.data) return fail("Order changed. Refresh to see its latest status.");
     return ok({ status, start_count: counts.start_count, remain: counts.remain });
   } catch (err) {
     return fail((err as Error).message);
@@ -552,7 +433,7 @@ export async function refillOrderAction(orderId: string): Promise<ActionResult> 
     return fail((err as Error).message);
   }
 
-  await supabase.from("orders").update({ refill_count: (order.refill_count ?? 0) + 1 }).eq("id", orderId);
+  await createAdminClient().from("orders").update({ refill_count: (order.refill_count ?? 0) + 1 }).eq("id", orderId);
   await writeLog({
     userId: user.id,
     action: "order_refill",

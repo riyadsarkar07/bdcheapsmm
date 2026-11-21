@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Layers, Search, ChevronLeft, ChevronRight } from "lucide-react";
-import { formatUsd, formatDateTime, truncate } from "@/lib/utils";
+import { formatCurrency, formatDateTime, truncate } from "@/lib/utils";
 import type { OrderStatus } from "@/lib/types/database";
 
 type OrderRow = {
@@ -202,7 +202,7 @@ export function OrdersList({
                         <span className="line-clamp-1">{truncate(order.services?.name ?? "Service", 50)}</span>
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">{order.quantity.toLocaleString()}</td>
-                      <td className="px-4 py-3 text-right font-medium tabular-nums">{formatUsd(order.price)}</td>
+                      <td className="px-4 py-3 text-right font-medium tabular-nums">{formatCurrency(order.price, order.currency)}</td>
                       <td className="px-4 py-3">
                         <OrderStatusBadge status={order.status} />
                       </td>
@@ -230,7 +230,7 @@ export function OrdersList({
                     <p className="mt-1 line-clamp-1 text-sm">{truncate(order.services?.name ?? "Service", 60)}</p>
                     <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
                       <span className="tabular-nums">
-                        {order.quantity.toLocaleString()} units · {formatUsd(order.price)}
+                        {order.quantity.toLocaleString()} units · {formatCurrency(order.price, order.currency)}
                       </span>
                       <span>{formatDateTime(order.created_at, "MMM d, h:mm a")}</span>
                     </div>

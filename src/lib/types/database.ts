@@ -853,6 +853,7 @@ export type Database = {
       generate_referral_code: { Args: Record<never, never>; Returns: string };
       get_coupon: { Args: { p_code: string }; Returns: Coupon };
       deduct_order_cost: { Args: { p_order_id: string; p_user_id: string }; Returns: Order };
+      order_quote_usd: { Args: { p_user_id: string; p_service_id: string; p_quantity: number; p_coupon: string }; Returns: number };
       create_and_charge_order: {
         Args: {
           p_user_id: string;
@@ -862,7 +863,8 @@ export type Database = {
           p_link: string;
           p_quantity: number;
           p_price: number;
-          p_currency: string;
+          p_coupon: string;
+          p_cost: number;
         };
         Returns: Order;
       };
@@ -880,7 +882,7 @@ export type Database = {
         Args: { p_ticket_id: string; p_message: string; p_is_staff?: boolean };
         Returns: TicketMessage;
       };
-      refund_order: { Args: { p_order_id: string; p_refunded_by: string }; Returns: Order };
+      refund_order: { Args: { p_order_id: string; p_refunded_by: string | null }; Returns: Order };
       create_notification: {
         Args: {
           p_user_id: string;

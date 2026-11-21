@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useReducedMotion } from "framer-motion";
-import { cn, formatUsd } from "@/lib/utils";
+import { cn, formatCurrency, formatUsd } from "@/lib/utils";
 
 export type ChartPoint = { label: string; value: number };
 
@@ -20,18 +20,20 @@ export type ChartValueFormat = "number" | "usd";
 export function MiniAreaChart({
   data,
   height = 160,
+  currency,
   valueFormat = "number",
   className,
   accent = "hsl(var(--primary))",
 }: {
   data: ChartPoint[];
   height?: number;
+  currency?: string;
   valueFormat?: ChartValueFormat;
   className?: string;
   accent?: string;
 }) {
   const formatValue = (value: number) =>
-    valueFormat === "usd" ? formatUsd(value) : value.toLocaleString("en-US");
+    currency ? formatCurrency(value, currency) : valueFormat === "usd" ? formatUsd(value) : value.toLocaleString("en-US");
   const reduced = useReducedMotion();
   const [hover, setHover] = React.useState<number | null>(null);
   const id = React.useId().replace(/:/g, "");

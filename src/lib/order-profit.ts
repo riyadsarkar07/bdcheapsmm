@@ -1,4 +1,4 @@
-import { computeProviderCost, minorToUsd, parsePositiveMoney, round2, toMinor } from "@/lib/pricing";
+import { computeProviderCost, priceInUsd, minorToUsd, parsePositiveMoney, round2, toMinor } from "@/lib/pricing";
 
 /**
  * Profit breakdown for a single order. The customer price is always the amount
@@ -20,11 +20,11 @@ export interface OrderProfit {
 }
 
 export function computeOrderProfit(
-  order: { price: number; quantity: number; charge?: number | null },
+  order: { price: number; currency: string; quantity: number; charge?: number | null },
   service: { provider_price?: number | null } | null | undefined
 ): OrderProfit {
-  const customerPrice = Number(order.price);
-  if (!Number.isFinite(customerPrice) || customerPrice < 0) {
+  const customerPrice = priceInUsd(Number(order.price), order.currency);
+  if (customerPrice == null || !Number.isFinite(customerPrice) || customerPrice < 0) {
     return { customerPrice: 0, providerCost: null, profit: null, profitPercent: null };
   }
 
