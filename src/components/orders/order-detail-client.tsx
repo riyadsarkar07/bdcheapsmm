@@ -74,11 +74,13 @@ export function OrderDetailClient({
   order,
   providerName,
   isAdmin = false,
+  isOwner,
   profit,
 }: {
   order: OrderWithRelations;
   providerName: string | null;
   isAdmin?: boolean;
+  isOwner: boolean;
   profit?: OrderProfit;
 }) {
   const router = useRouter();
@@ -279,6 +281,12 @@ export function OrderDetailClient({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2.5">
+            {isOwner && (
+              <>
+                <Button asChild variant="outline"><Link href={`/support/new?order=${orderState.id}`}>Get order support</Link></Button>
+                {orderState.service_id && <Button asChild variant="gradient"><Link href={`/services/${orderState.service_id}?repeat=${orderState.id}`}>Order again</Link></Button>}
+              </>
+            )}
             <Button asChild variant="gradient" className="w-full justify-start">
               <a href={`/api/orders/${orderState.id}/invoice`} download={`invoice-${orderState.order_number}.pdf`}>
                 <FileDown />

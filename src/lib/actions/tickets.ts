@@ -8,6 +8,7 @@ import { generateTicketNumber } from "@/lib/utils";
 import { writeLog } from "@/lib/audit";
 
 export async function createTicketAction(input: {
+  orderId?: string;
   subject: string;
   category?: string;
   priority: string;
@@ -28,6 +29,13 @@ export async function createTicketAction(input: {
   const { createClient } = await import("@/lib/supabase/server");
   const supabase = await createClient();
 
+  let message = parsed.data.message;
+  if (input.orderId) {
+    const { data: order } = await supabase.from("orders").select("order_number,status,services(name)")
+      .eq("id", input.orderId).eq("user_id", user.id).maybeSingle();
+    if (!order) return fail("Order not found.");
+    message = [`Order #${order.order_number} · ${order.services?.name ?? "Service"} · ${order.status}`, message].join("\n\n");
+  }
   const ticketNumber = generateTicketNumber();
 
   const { data: ticket, error: ticketError } = await supabase.rpc(
@@ -37,7 +45,7 @@ export async function createTicketAction(input: {
       p_subject: parsed.data.subject,
       p_priority: parsed.data.priority,
       p_category: parsed.data.category || null,
-      p_message: parsed.data.message,
+      p_message: message,
     }
   );
 

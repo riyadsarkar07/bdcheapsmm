@@ -80,6 +80,10 @@ export async function GET(request: Request) {
         counts.remain !== (order.remain ?? null);
 
       if (status === "refunded" || status === "cancelled") {
+        const snapshot = await supabase.from("orders").update({
+          provider_response: result as never, ...counts,
+        }).eq("id", order.id);
+        if (snapshot.error) throw snapshot.error;
         const refund = await supabase.rpc("refund_order", { p_order_id: order.id, p_refunded_by: null });
         if (refund.error) throw refund.error;
         updated++;

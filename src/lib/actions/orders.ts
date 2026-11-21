@@ -388,9 +388,11 @@ export async function refreshOrderStatusAction(
     };
     const admin = createAdminClient();
     if (status === "cancelled" || status === "refunded") {
-      const result = await admin.rpc("refund_order", { p_order_id: orderId, p_refunded_by: user.id });
-      if (result.error) return fail(result.error.message);
-      return ok({ status: "refunded", start_count: order.start_count, remain: order.remain });
+      const snapshot = await admin.from("orders").update({ provider_response: result as never, ...counts }).eq("id", orderId);
+      if (snapshot.error) return fail("Unable to save provider confirmation. Please refresh again.");
+      const refund = await admin.rpc("refund_order", { p_order_id: orderId, p_refunded_by: user.id });
+      if (refund.error) return fail(refund.error.message);
+      return ok({ status: "refunded", ...counts });
     }
     const write = await admin.from("orders").update(updates).eq("id", orderId)
       .eq("status", order.status).neq("status", "refunded").select("id").maybeSingle();

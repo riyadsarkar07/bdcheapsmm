@@ -55,6 +55,7 @@ export default async function OrderDetailPage({
       <OrderDetailClient
         order={order}
         providerName={isAdmin ? provider?.name ?? null : null}
+        isOwner={user.id === order.user_id}
         isAdmin={isAdmin}
         profit={profit}
       />

@@ -26,6 +26,7 @@ export default function DashboardError({
         <p className="mt-1.5 text-sm text-muted-foreground">
           We could not load this page. Please try again, your data is safe.
         </p>
+        {error.digest && <p className="mt-2 text-xs text-muted-foreground">Error reference: {error.digest}</p>}
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
           <Button onClick={reset} variant="gradient">
             <RefreshCw /> Try again

@@ -15,8 +15,9 @@ export const revalidate = 0;
 export const maxDuration = 60;
 
 export default async function ServiceOrderPage({
-  params,
+  params, searchParams,
 }: {
+  searchParams: Promise<{ repeat?: string }>;
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
@@ -32,7 +33,11 @@ export default async function ServiceOrderPage({
     .eq("id", id)
     .maybeSingle();
 
-  if (!service) notFound();
+  if (!service || !service.is_active) notFound();
+  const { repeat } = await searchParams;
+  const previous = repeat ? (await supabase.from("orders").select("link,quantity")
+    .eq("id", repeat).eq("service_id", id).eq("user_id", user.id).maybeSingle()).data : null;
+  if (repeat && !previous) notFound();
 
   return (
     <div>
@@ -44,7 +49,7 @@ export default async function ServiceOrderPage({
 
       <div className="grid gap-6 lg:grid-cols-5">
         {/* Service info */}
-        <div className="lg:col-span-3">
+        <div className="order-2 lg:order-1 lg:col-span-3">
           <div className="glass-card rounded-xl p-6">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl gradient-bg text-white shadow-lg">
@@ -117,9 +122,11 @@ export default async function ServiceOrderPage({
         </div>
 
         {/* Order form */}
-        <div className="lg:col-span-2">
+        <div className="order-1 lg:order-2 lg:col-span-2">
           <OrderForm
+            key={repeat ?? service.id}
             serviceId={service.id}
+            previous={previous}
             serviceName={service.name}
             pricePerUnit={Number(service.price)}
             minQuantity={service.min_quantity}

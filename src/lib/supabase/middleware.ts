@@ -26,11 +26,14 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Do not cache authenticated routes.
-  supabaseResponse.headers.set(
-    "Cache-Control",
-    "private, no-cache, no-store, max-age=0, must-revalidate"
-  );
+  function sessionResponse(redirectTo?: URL) {
+    const response = redirectTo ? NextResponse.redirect(redirectTo) : supabaseResponse;
+    if (redirectTo) {
+      for (const cookie of supabaseResponse.cookies.getAll()) response.cookies.set(cookie);
+    }
+    response.headers.set("Cache-Control", "private, no-cache, no-store, max-age=0, must-revalidate");
+    return response;
+  }
 
-  return { supabase, supabaseResponse };
+  return { supabase, sessionResponse };
 }

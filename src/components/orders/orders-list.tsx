@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Layers, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatCurrency, formatDateTime, truncate } from "@/lib/utils";
 import type { OrderStatus } from "@/lib/types/database";
 
@@ -35,99 +35,59 @@ const PAGE_SIZE = 15;
 
 export function OrdersList({
   initialOrders,
+  initialTotal,
   userId,
   statusFilter,
 }: {
   initialOrders: OrderRow[];
+  initialTotal: number;
   userId: string;
   statusFilter?: string;
 }) {
   const supabase = createClient();
-  const [orders, setOrders] = React.useState<OrderRow[]>(initialOrders);
+  const [visible, setOrders] = React.useState(initialOrders);
+  const [total, setTotal] = React.useState(initialTotal);
+  const [error, setError] = React.useState("");
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState(statusFilter ?? "all");
   const [page, setPage] = React.useState(0);
-
-  React.useEffect(() => {
-    setOrders(initialOrders);
-    setPage(0);
-  }, [initialOrders]);
-
-  React.useEffect(() => {
-    let mounted = true;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    function refresh() {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(async () => {
-        if (!mounted) return;
-        let query = supabase
-          .from("orders")
-          .select("id, order_number, service_id, services(name), quantity, price, status, created_at, currency")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false });
-        if (statusFilter && statusFilter !== "all") {
-          query = query.eq("status", statusFilter as OrderStatus);
-        }
-        const { data } = await query.limit(100);
-        if (mounted && data) {
-          setOrders(data as OrderRow[]);
-        }
-      }, 400);
-    }
-
-    const channel = supabase
-      .channel("orders-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "orders", filter: `user_id=eq.${userId}` },
-        refresh
-      )
-      .subscribe();
-
-    // Polling fallback so status changes still surface when realtime events are
-    // not delivered. Reuses the same debounced refresh (no duplicate logic).
-    const poll = setInterval(refresh, 30_000);
-
-    return () => {
-      mounted = false;
-      if (timer) clearTimeout(timer);
-      clearInterval(poll);
-      supabase.removeChannel(channel);
-    };
-  }, [supabase, userId, statusFilter]);
-
-  const filtered = React.useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return orders.filter((order) => {
-      const matchesStatus = status === "all" || order.status === status;
-      const matchesSearch =
-        !term ||
-        order.order_number.toLowerCase().includes(term) ||
-        (order.services?.name ?? "").toLowerCase().includes(term);
-      return matchesStatus && matchesSearch;
-    });
-  }, [orders, search, status]);
-
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
-  const visible = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
 
-  if (orders.length === 0) {
-    return (
-      <EmptyState
-        title="No orders found"
-        description="Place your first order and it will show up here."
-        action={
-          <Button asChild variant="gradient">
-            <Link href="/services">
-              <Layers /> Browse Services
-            </Link>
-          </Button>
-        }
-      />
-    );
-  }
+  React.useEffect(() => {
+    let active = true;
+    let revision = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    async function refresh() {
+      const version = ++revision;
+      let query = supabase.from("orders")
+        .select("id, order_number, service_id, services(name), matching:services(), quantity, price, status, created_at, currency", { count: "exact" })
+        .eq("user_id", userId);
+      if (status !== "all") query = query.eq("status", status as OrderStatus);
+      const term = search.trim().replace(/^#/, "");
+      if (term) {
+        const pattern = "%" + term.replace(/[\\%_]/g, "\\$&") + "%";
+        query = query.ilike("matching.name", pattern)
+          .or("order_number.ilike." + JSON.stringify(pattern) + ",matching.not.is.null");
+      }
+      const result = await query.order("created_at", { ascending: false })
+        .order("id").range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+      if (!active || revision !== version) return;
+      if (result.error?.code === "PGRST103" && page > 0) { setPage(0); return; }
+      if (result.error) { setError("Could not load orders. Please try again."); return; }
+      setError("");
+      setOrders(result.data ?? []);
+      setTotal(result.count ?? 0);
+      setPage(p => Math.min(p, Math.max(0, Math.ceil((result.count ?? 0) / PAGE_SIZE) - 1)));
+    }
+    function schedule() { clearTimeout(timer); timer = setTimeout(refresh, 300); }
+    schedule();
+    const channel = supabase.channel("orders-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders", filter: `user_id=eq.${userId}` }, schedule)
+      .subscribe();
+    const poll = setInterval(schedule, 30_000);
+    return () => { active = false; clearTimeout(timer); clearInterval(poll); void supabase.removeChannel(channel); };
+  }, [supabase, userId, status, search, page]);
 
   return (
     <div className="space-y-4">
@@ -164,12 +124,13 @@ export function OrdersList({
             <SelectItem value="partial">Partial</SelectItem>
             <SelectItem value="cancelled">Cancelled</SelectItem>
             <SelectItem value="refunded">Refunded</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
             <SelectItem value="failed">Failed</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {filtered.length === 0 ? (
+      {error ? <p role="alert">{error}</p> : visible.length === 0 ? (
         <EmptyState
           title="No matching orders"
           description="Try a different search term or status filter."
@@ -242,10 +203,10 @@ export function OrdersList({
         </Card>
       )}
 
-      {filtered.length > PAGE_SIZE ? (
+      {total > PAGE_SIZE ? (
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
-            Page {safePage + 1} of {pageCount} · {filtered.length} orders
+            Page {safePage + 1} of {pageCount} · {total} orders
           </p>
           <div className="flex gap-2">
             <Button

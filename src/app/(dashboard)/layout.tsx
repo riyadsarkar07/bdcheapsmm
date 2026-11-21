@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getPublicSettings } from "@/lib/settings";
 import { getSessionProfile } from "@/lib/guards";
+import { signOutAction } from "@/lib/actions/auth";
+import { Button } from "@/components/ui/button";
 import { AppShell } from "@/components/layout/app-shell";
 import type { Profile } from "@/lib/types/database";
 
@@ -12,12 +14,15 @@ export default async function DashboardLayout({
 }) {
   const { user, profile } = await getSessionProfile();
 
-  if (!user || !profile) redirect("/login");
-
-  if (profile.status === "banned") {
-    const supabaseBanned = await createClient();
-    await supabaseBanned.auth.signOut();
-    redirect("/login?error=banned");
+  if (!user) redirect("/login");
+  if (!profile || profile.status === "banned") {
+    return (
+      <main className="mx-auto max-w-md space-y-4 p-6">
+        <h1 className="text-xl font-semibold">{profile ? "Account suspended" : "Could not load your profile"}</h1>
+        <p>{profile ? "Contact support about your account." : "Refresh the page to try again, or sign out."}</p>
+        <form action={signOutAction}><Button>Sign out</Button></form>
+      </main>
+    );
   }
 
   const settings = await getPublicSettings();

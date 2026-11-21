@@ -56,6 +56,7 @@ export function AdminShell({
       label: "Finance",
       items: [
         { href: "/admin/payments", label: "Payments", icon: Banknote },
+        { href: "/admin/refunds", label: "Refund report", icon: ClipboardList },
         { href: "/admin/transactions", label: "Transactions", icon: History },
         { href: "/admin/referrals", label: "Referrals", icon: Gift },
         { href: "/admin/coupons", label: "Coupons", icon: TicketPercent },

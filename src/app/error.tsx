@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 
 export default function GlobalError({
   error,
-  reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
@@ -26,8 +25,9 @@ export default function GlobalError({
         <p className="mt-1.5 text-sm text-muted-foreground">
           An unexpected error occurred. Your balance and order records are safe.
         </p>
+        {error.digest && <p className="mt-2 text-xs text-muted-foreground">Error reference: {error.digest}</p>}
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
-          <Button onClick={reset} variant="gradient">
+          <Button onClick={() => window.location.reload()} variant="gradient">
             <RefreshCw /> Try again
           </Button>
           <Button asChild variant="outline">

@@ -67,6 +67,7 @@ interface OrderFormProps {
   maxQuantity: number;
   balance: number;
   currency: string;
+  previous?: { quantity: number; link: string } | null;
   linkPlaceholder?: string;
   /** Human-readable provider ETA, e.g. "0-1 hours". */
   averageTime?: string | null;
@@ -80,6 +81,7 @@ export function OrderForm({
   maxQuantity,
   balance,
   currency,
+  previous,
   linkPlaceholder,
   averageTime,
 }: OrderFormProps) {
@@ -95,7 +97,7 @@ export function OrderForm({
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { quantity: minQuantity, link: "", coupon: "" },
+    defaultValues: { quantity: Math.max(minQuantity, Math.min(maxQuantity, previous?.quantity ?? minQuantity)), link: previous?.link ?? "", coupon: "" },
   });
 
   const quantity = form.watch("quantity") || 0;
@@ -196,13 +198,16 @@ export function OrderForm({
           <h2 className="flex items-center gap-2 text-lg font-bold">
             <ShoppingCart className="h-5 w-5 text-primary" /> Place Order
           </h2>
-          <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{serviceName}</p>
+          <p className="mt-1 break-words text-sm text-muted-foreground">{serviceName}</p>
         </div>
         <Badge variant="info" className="shrink-0">
           {formatUsd(pricePerUnit)} / 1k
         </Badge>
       </div>
 
+      {previous && previous.quantity !== form.formState.defaultValues?.quantity && (
+        <p className="mb-3 text-sm text-muted-foreground">The service limits changed. Check the adjusted quantity before placing this order.</p>
+      )}
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <FormField
@@ -339,16 +344,16 @@ export function OrderForm({
               <span className="text-muted-foreground">Rate (per 1k)</span>
               <span className="tabular-nums">{formatUsd(pricePerUnit)}</span>
             </div>
-            {averageTime ? (
+            <div className="mt-1.5 flex justify-between text-sm"><span>Quantity range</span><span>{minQuantity.toLocaleString()} – {maxQuantity.toLocaleString()}</span></div>
+            {applied && <div className="mt-1.5 flex justify-between text-sm text-success"><span>Coupon discount</span><span>−{formatCurrency(walletCharge(computeOrderCharge(pricePerUnit, quantity), currency) - total, currency)}</span></div>}
               <div className="mt-1.5 flex items-center justify-between text-sm">
                 <span className="flex items-center gap-1 text-muted-foreground">
                   <Clock className="h-3.5 w-3.5" /> Est. delivery
                 </span>
-                <span>{averageTime}</span>
+                <span>{averageTime || "Not provided"}</span>
               </div>
-            ) : null}
             <div className="mt-2.5 flex items-center justify-between border-t pt-2.5">
-              <span className="font-medium">Total</span>
+              <span className="font-medium">Wallet charge</span>
               <span className="text-xl font-bold text-primary tabular-nums">
                 {Number.isFinite(total) ? formatCurrency(total, currency) : "Unavailable"}
               </span>

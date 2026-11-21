@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
 const PUBLIC_ROUTES = new Set([
@@ -12,7 +12,7 @@ const PUBLIC_ROUTES = new Set([
 ]);
 
 export async function middleware(request: NextRequest) {
-  const { supabase, supabaseResponse } = await updateSession(request);
+  const { supabase, sessionResponse } = await updateSession(request);
   const path = request.nextUrl.pathname;
 
   const {
@@ -26,14 +26,14 @@ export async function middleware(request: NextRequest) {
   if (user && (path === "/login" || path === "/register")) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+    return sessionResponse(url);
   }
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("next", path);
-    return NextResponse.redirect(url);
+    return sessionResponse(url);
   }
 
   if (user && isAdminRoute) {
@@ -46,11 +46,11 @@ export async function middleware(request: NextRequest) {
     if (!profile || profile.role !== "admin" || profile.status !== "active") {
       const url = request.nextUrl.clone();
       url.pathname = "/dashboard";
-      return NextResponse.redirect(url);
+      return sessionResponse(url);
     }
   }
 
-  return supabaseResponse;
+  return sessionResponse();
 }
 
 export const config = {

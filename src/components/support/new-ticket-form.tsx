@@ -28,19 +28,19 @@ const formSchema = z.object({
   message: z.string().min(5, "Please describe your issue").max(5000),
 });
 
-export function NewTicketForm() {
+export function NewTicketForm({ orderId, subject = "" }: { orderId?: string; subject?: string }) {
   const router = useRouter();
   const [loading, setLoading] = React.useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { subject: "", category: "", priority: "normal", message: "" },
+    defaultValues: { subject, category: orderId ? "Order" : "", priority: "normal", message: "" },
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setLoading(true);
     try {
-      const result = await createTicketAction(values);
+      const result = await createTicketAction({ ...values, orderId });
       if (result.success && result.data) {
         toast.success("Ticket created!");
         router.push(`/support/${result.data.ticketId}`);

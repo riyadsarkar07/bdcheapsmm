@@ -21,7 +21,7 @@ export default async function OrdersPage({
   const supabase = await createClient();
   const baseQuery = supabase
     .from("orders")
-    .select("id, order_number, service_id, services(name), quantity, price, status, created_at, currency")
+    .select("id, order_number, service_id, services(name), quantity, price, status, created_at, currency", { count: "exact" })
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -30,7 +30,7 @@ export default async function OrdersPage({
       ? baseQuery.eq("status", status as OrderStatus)
       : baseQuery;
 
-  const { data: orders } = await query.limit(100);
+  const { data: orders, count } = await query.order("id").limit(15);
 
   return (
     <div>
@@ -47,7 +47,7 @@ export default async function OrdersPage({
         </Button>
       </PageHeader>
 
-      <OrdersList initialOrders={orders ?? []} userId={user.id} statusFilter={status} />
+      <OrdersList initialTotal={count ?? 0} initialOrders={orders ?? []} userId={user.id} statusFilter={status} />
     </div>
   );
 }
