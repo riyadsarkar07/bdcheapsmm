@@ -101,6 +101,7 @@ export type Provider = {
   priority: number;
   balance: number | null;
   last_sync_at: string | null;
+  refill_checked_at?: string | null;
   sync_status: string | null;
   sync_message: string | null;
   config: Json;
@@ -925,6 +926,7 @@ export type Database = {
         Args: { p_percentage: number; p_rounding: string };
         Returns: number;
       };
+      sync_refill_flags: { Args: { p_provider: string; p_flags: Json; p_checked_at: string }; Returns: number };
       sync_provider_services: {
         Args: { p_provider_id: string; p_items: unknown };
         Returns: { imported: number; updated: number }[];

@@ -425,7 +425,7 @@ export async function refreshOrderStatusAction(
   }
 }
 
-export async function refillOrderAction(orderId: string): Promise<ActionResult> {
+export async function refillOrderAction(orderId: string, askProvider = false): Promise<ActionResult> {
   const { user, error } = await requireUser();
   if (error || !user) return fail(error ?? "Not authenticated");
 
@@ -442,7 +442,7 @@ export async function refillOrderAction(orderId: string): Promise<ActionResult> 
   if (order.user_id !== user.id && !isAdminProfile(user)) return fail("Forbidden.");
   if (!order.provider_order_id) return fail("No provider order reference.");
   if (!["completed", "partial"].includes(order.status)) return fail("Refill requires a completed or partial order.");
-  if (refillTerms(order.services?.meta, order.services?.name, order.services?.description ?? "").disabled) return fail("Refill is not available for this service.");
+  if (!(askProvider && isAdminProfile(user)) && refillTerms(order.services?.meta, order.services?.name, order.services?.description ?? "").disabled) return fail("Refill is not available for this service.");
   if ((order.refill_count ?? 0) >= 2) return fail("Refill limit reached for this order.");
   if (!order.provider_id) return fail("Provider not found.");
 

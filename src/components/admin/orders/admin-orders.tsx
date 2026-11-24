@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  refreshRefillCatalogAction,
   adminUpdateOrderStatusAction,
   adminRefundOrderAction,
   adminBulkRetryFailedOrdersAction,
@@ -83,8 +84,10 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
   const [retryLink, setRetryLink] = React.useState("");
 
   const filtered = orders.filter((order) => {
+    const term = search.trim().replace(/^#/, "").toLowerCase();
     const matchesSearch =
-      order.order_number.toLowerCase().includes(search.toLowerCase()) ||
+      (order.provider_order_id ?? "").toLowerCase().includes(term) ||
+      order.order_number.toLowerCase().includes(term) ||
       (order.profiles?.email ?? "").toLowerCase().includes(search.toLowerCase()) ||
       (order.profiles?.full_name ?? "").toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === "all" || order.status === statusFilter;
@@ -106,12 +109,12 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
     }
   }
 
-  async function runOrderAction(order: OrderRow, name: string, fn: () => Promise<{ success: boolean; error?: string }>) {
+  async function runOrderAction(order: OrderRow, name: string, fn: () => Promise<{ success: boolean; error?: string; message?: string }>) {
     setActionLoading(order.id + name);
     try {
       const result = await fn();
       if (result.success) {
-        toast.success(`Order #${order.order_number}: ${name}`);
+        toast.success(result.message ?? `Order #${order.order_number}: ${name}`);
         router.refresh();
       } else {
         toast.error(result.error ?? `${name} failed`);
@@ -217,13 +220,14 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
           variant="ghost"
           size="sm"
           className="text-warning hover:text-warning"
-          onClick={() =>
-            runOrderAction(order, "Refill", () => refillOrderAction(order.id))
-          }
-          disabled={order.refillDisabled || !order.provider_order_id || actionLoading === order.id + "Refill"}
+          onClick={() => {
+            if (order.refillDisabled && !window.confirm(`The saved catalog lists no automatic refill. Send a real refill request to ${order.providerName} for provider order ${order.provider_order_id}?`)) return;
+            void runOrderAction(order, "Refill", () => refillOrderAction(order.id, order.refillDisabled));
+          }}
+          disabled={!order.provider_order_id || !!actionLoading}
           title="Request refill"
         >
-          {actionLoading === order.id + "Refill" ? <Loader2 className="animate-spin" /> : <RotateCcw />} {order.refillDisabled ? "Refill unavailable" : "Request refill"}
+          {actionLoading === order.id + "Refill" ? <Loader2 className="animate-spin" /> : <RotateCcw />} {order.refillDisabled ? "Ask provider for refill" : "Request refill"}
         </Button>
       ) : null}
       {canRetry(order.status) ? (
@@ -263,13 +267,21 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
         <div className="relative max-w-sm flex-1">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search order #, email or name..."
+            placeholder="Panel or provider order ID, email or name..."
             className="pl-9"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="outline" disabled={!!actionLoading} onClick={async () => {
+            setActionLoading("catalog");
+            try {
+              const result = await refreshRefillCatalogAction();
+              if (result.success) toast.success(result.message); else toast.error(result.error);
+              router.refresh();
+            } finally { setActionLoading(null); }
+          }}>Refresh refill availability</Button>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-44">
               <SelectValue />

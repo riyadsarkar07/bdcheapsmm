@@ -84,6 +84,7 @@ const bangla: Record<string, string> = {
   "Unavailable": "পাওয়া যাচ্ছে না",
   "Available · period not specified": "রিফিল আছে · মেয়াদ জানানো হয়নি",
   "Provider has not specified refill terms": "প্রোভাইডার রিফিলের শর্ত জানায়নি",
+  "Listed without automatic refill": "ক্যাটালগে স্বয়ংক্রিয় রিফিল নেই",
   "Not available for this service": "এই সার্ভিসে রিফিল নেই",
   "No exchange rate is configured for your wallet currency.": "এই ওয়ালেটের মুদ্রার বিনিময় হার দেওয়া নেই।",
   "This quantity rounds to a $0.00 order. Increase the quantity to get a payable total.": "এই পরিমাণের চার্জ দুই দশমিকে শূন্য হয়। চার্জ হিসাব করতে পরিমাণ বাড়ান।",

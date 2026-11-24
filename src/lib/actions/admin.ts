@@ -1307,3 +1307,18 @@ export async function seedHelpCatalogAction(): Promise<ActionResult<{ inserted: 
   revalidateHelpCenter();
   return ok({ inserted: rows.length }, `Added ${rows.length} default articles.`);
 }
+
+
+export async function refreshRefillCatalogAction(): Promise<ActionResult> {
+  const { user, error } = await requireAdmin();
+  if (!user || error) return fail(error ?? "Admin access required.");
+  if (!(await rateLimit(`refill-catalog:${user.id}`, 2, 60)).success) return fail("Please wait before checking again.");
+  const { refreshRefillCatalog } = await import("@/lib/provider/refill-sync");
+  try {
+    const { changed, failed } = await refreshRefillCatalog(true);
+    if (failed) return fail(`Updated ${changed} services. Could not verify ${failed} provider(s).`);
+    return ok(undefined, `Provider catalog checked. Updated ${changed} services.`);
+  } catch {
+    return fail("Could not verify refill availability with the provider.");
+  }
+}

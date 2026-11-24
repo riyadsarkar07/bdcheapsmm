@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { refreshRefillCatalog } from "@/lib/provider/refill-sync";
 import { runProviderHealthChecks } from "@/lib/provider-health";
 
 /**
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: error?.message ?? "No providers" }, { status: 500 });
   }
 
-  const tally = await runProviderHealthChecks(supabase, providers);
+  const [tally, refill] = await Promise.all([runProviderHealthChecks(supabase, providers), refreshRefillCatalog()]);
 
-  return NextResponse.json({ ok: true, ...tally });
+  return NextResponse.json({ ok: refill.failed === 0, ...tally, refill }, { status: refill.failed ? 502 : 200 });
 }
