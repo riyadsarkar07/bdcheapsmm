@@ -166,7 +166,7 @@ export function OrderDetailClient({
     <motion.div
       initial={reduced ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-5"
+      className="min-w-0 max-w-full space-y-5 [overflow-wrap:anywhere]"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
@@ -174,7 +174,7 @@ export function OrderDetailClient({
           <h1 className="break-words text-xl font-bold sm:text-2xl">{orderState.services?.name ?? t("Order details")}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{t("Last provider check")} · {checkedAt ? formatDateTime(checkedAt) : t("Not checked yet")}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <OrderStatusBadge providerStatus={providerStatus || (order.provider_order_id ? "Awaiting provider status" : null)} status={orderState.status} />
           {order.provider_order_id && <Button size="icon" variant="ghost" aria-label={t("Refresh Status")} title={t("Refresh Status")}
             disabled={action !== null} onClick={() => runAction("refresh", () => refreshOrderStatusAction(order.id))}>
@@ -191,8 +191,8 @@ export function OrderDetailClient({
         </div>
       ) : null}
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="space-y-5 lg:col-span-2">
+      <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-3">
+        <div className="min-w-0 space-y-5 lg:col-span-2">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -213,20 +213,20 @@ export function OrderDetailClient({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
+          <Card className="min-w-0">
+            <CardHeader className="p-4 sm:p-6">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Hash className="h-4 w-4 text-primary" /> <CustomerText value="Order Details" />
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+            <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6">
+              <dl className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
                 {details.map((item) => (
-                  <div key={item.label} className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
-                    <dt className="text-xs text-muted-foreground"><CustomerText value={item.label} /></dt>
-                    <dd className="flex min-w-0 items-center gap-1 text-right text-sm font-medium">
-                      <span className="max-w-[180px] truncate">{item.value}</span>
-                      {item.copy ? <CopyButton value={item.copy} label={`Copy ${item.label}`} /> : null}
+                  <div key={item.label} className="grid min-w-0 grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-center gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                    <dt className="text-sm text-foreground/80"><CustomerText value={item.label} /></dt>
+                    <dd className="flex min-w-0 items-center justify-end gap-1 text-right text-sm font-medium">
+                      <span className="min-w-0 [overflow-wrap:anywhere]">{item.value}</span>
+                      {item.copy && <CopyButton className="shrink-0" value={item.copy} label={`Copy ${item.label}`} />}
                     </dd>
                   </div>
                 ))}
@@ -238,24 +238,24 @@ export function OrderDetailClient({
                 <p className="eyebrow"><CustomerText value="Target link" /></p>
                 <div className="flex items-center gap-2 rounded-lg border p-3">
                   <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate text-sm">{orderState.link}</span>
+                  <span className="min-w-0 flex-1 text-sm [overflow-wrap:anywhere]">{orderState.link}</span>
                   <a
                     href={orderState.link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-muted-foreground transition-colors hover:text-primary"
+                    className="shrink-0 text-muted-foreground transition-colors hover:text-primary"
                     aria-label="Open target link in a new tab"
                   >
                     <ExternalLink className="h-4 w-4" />
                   </a>
-                  <CopyButton value={orderState.link} />
+                  <CopyButton className="shrink-0" value={orderState.link} />
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <Card className="h-fit lg:sticky lg:top-24">
+        <Card className="h-fit min-w-0 lg:sticky lg:top-24">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Layers className="h-4 w-4 text-primary" /> <CustomerText value="Actions" />
