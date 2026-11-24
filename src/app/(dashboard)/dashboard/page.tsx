@@ -80,7 +80,7 @@ export default async function DashboardPage() {
     supabase.from("transactions").select("amount").eq("user_id", user.id).eq("type", "order_deduction"),
     supabase
       .from("orders")
-      .select("id, order_number, service_id, services(name), quantity, price, status, created_at, currency")
+      .select("id, order_number, provider_order_id, service_id, services(name), quantity, price, status, created_at, currency")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(8),
@@ -469,6 +469,9 @@ export default async function DashboardPage() {
                           <Link href={`/orders/${order.id}`} className="font-medium text-primary hover:underline">
                             #{order.order_number}
                           </Link>
+                          {order.provider_order_id && (
+                            <p className="break-all text-xs text-muted-foreground">Provider Order ID: {order.provider_order_id}</p>
+                          )}
                         </td>
                         <td className="max-w-[220px] px-4 py-3">
                           <span className="line-clamp-1">{truncate(order.services?.name ?? "Service", 40)}</span>
@@ -497,6 +500,9 @@ export default async function DashboardPage() {
                         <span className="text-sm font-semibold text-primary">#{order.order_number}</span>
                         <OrderStatusBadge status={order.status as OrderStatus} />
                       </div>
+                      {order.provider_order_id && (
+                        <p className="break-all text-xs text-muted-foreground">Provider Order ID: {order.provider_order_id}</p>
+                      )}
                       <p className="mt-1 line-clamp-1 text-sm">{truncate(order.services?.name ?? "Service", 48)}</p>
                       <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
                         <span className="tabular-nums">

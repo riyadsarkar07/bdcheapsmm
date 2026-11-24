@@ -22,6 +22,7 @@ import type { OrderStatus } from "@/lib/types/database";
 type OrderRow = {
   id: string;
   order_number: string;
+  provider_order_id: string | null;
   service_id: string | null;
   services?: { name: string } | null;
   quantity: number;
@@ -61,14 +62,15 @@ export function OrdersList({
     async function refresh() {
       const version = ++revision;
       let query = supabase.from("orders")
-        .select("id, order_number, service_id, services(name), matching:services(), quantity, price, status, created_at, currency", { count: "exact" })
+        .select("id, order_number, provider_order_id, service_id, services(name), matching:services(), quantity, price, status, created_at, currency", { count: "exact" })
         .eq("user_id", userId);
       if (status !== "all") query = query.eq("status", status as OrderStatus);
       const term = search.trim().replace(/^#/, "");
       if (term) {
         const pattern = "%" + term.replace(/[\\%_]/g, "\\$&") + "%";
+        const quotedPattern = JSON.stringify(pattern);
         query = query.ilike("matching.name", pattern)
-          .or("order_number.ilike." + JSON.stringify(pattern) + ",matching.not.is.null");
+          .or(`order_number.ilike.${quotedPattern},provider_order_id.ilike.${quotedPattern},matching.not.is.null`);
       }
       const result = await query.order("created_at", { ascending: false })
         .order("id").range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
@@ -95,7 +97,7 @@ export function OrdersList({
         <div className="relative w-full sm:max-w-xs">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search by order # or service..."
+            placeholder="Search order #, provider ID or service"
             className="pl-9"
             value={search}
             onChange={(e) => {
@@ -158,6 +160,9 @@ export function OrdersList({
                         <Link href={`/orders/${order.id}`} className="font-semibold text-primary hover:underline">
                           #{order.order_number}
                         </Link>
+                        {order.provider_order_id && (
+                          <p className="break-all text-xs text-muted-foreground">Provider Order ID: {order.provider_order_id}</p>
+                        )}
                       </td>
                       <td className="max-w-[280px] px-4 py-3">
                         <span className="line-clamp-1">{truncate(order.services?.name ?? "Service", 50)}</span>
@@ -188,6 +193,9 @@ export function OrdersList({
                       <span className="text-sm font-semibold text-primary">#{order.order_number}</span>
                       <OrderStatusBadge status={order.status} />
                     </div>
+                    {order.provider_order_id && (
+                      <p className="break-all text-xs text-muted-foreground">Provider Order ID: {order.provider_order_id}</p>
+                    )}
                     <p className="mt-1 line-clamp-1 text-sm">{truncate(order.services?.name ?? "Service", 60)}</p>
                     <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
                       <span className="tabular-nums">

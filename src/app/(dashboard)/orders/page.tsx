@@ -21,7 +21,7 @@ export default async function OrdersPage({
   const supabase = await createClient();
   const baseQuery = supabase
     .from("orders")
-    .select("id, order_number, service_id, services(name), quantity, price, status, created_at, currency", { count: "exact" })
+    .select("id, order_number, provider_order_id, service_id, services(name), quantity, price, status, created_at, currency", { count: "exact" })
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
