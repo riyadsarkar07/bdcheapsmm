@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Search, Loader2, RefreshCw, Undo2, RotateCcw, XCircle, Zap } from "lucide-react";
+import { Search, Loader2, RefreshCw, Undo2, RotateCcw, Zap } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,6 +48,8 @@ type OrderRow = {
   profiles?: { full_name: string | null; email: string | null } | null;
   services?: { name: string } | null;
   provider_id: string | null;
+  providerName: string;
+  requested: boolean;
   provider_order_id: string | null;
   quantity: number;
   price: number;
@@ -75,6 +77,7 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
   const [statusFilter, setStatusFilter] = React.useState<string>("all");
   const [actionLoading, setActionLoading] = React.useState<string | null>(null);
   const [retrying, setRetrying] = React.useState(false);
+  const [providerTarget, setProviderTarget] = React.useState<OrderRow | null>(null);
   const [retryTarget, setRetryTarget] = React.useState<OrderRow | null>(null);
   const [retryLink, setRetryLink] = React.useState("");
 
@@ -115,6 +118,28 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
     } finally {
       setActionLoading(null);
     }
+  }
+
+  async function requestProviderRefund() {
+    if (!providerTarget || actionLoading) return;
+    setActionLoading(providerTarget.id + "provider");
+    try {
+      const result = await cancelOrderAction(providerTarget.id);
+      if (result.success) toast.success(result.message ?? "Request sent to provider.");
+      else toast.error(result.error ?? "Provider request failed.");
+      setProviderTarget(null);
+      router.refresh();
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  function providerButton(order: OrderRow) {
+    if (!canCancel(order.status) || !order.provider_id || !order.provider_order_id) return null;
+    return <Button variant="outline" size="sm" disabled={order.requested || !!actionLoading}
+      onClick={() => setProviderTarget(order)}>
+      {order.requested ? "Provider request recorded" : "Request provider refund"}
+    </Button>;
   }
 
   async function refund(order: OrderRow) {
@@ -326,20 +351,7 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                               <Zap />
                             </Button>
                           ) : null}
-                          {canCancel(order.status) ? (
-                            <Button
-                              variant="ghost"
-                              size="iconSm"
-                              className="text-destructive hover:text-destructive"
-                              onClick={() =>
-                                runOrderAction(order, "Cancel", () => cancelOrderAction(order.id))
-                              }
-                              disabled={actionLoading === order.id + "Cancel"}
-                              title="Cancel order"
-                            >
-                              {actionLoading === order.id + "Cancel" ? <Loader2 className="animate-spin" /> : <XCircle />}
-                            </Button>
-                          ) : null}
+                          {providerButton(order)}
                           {order.status !== "refunded" ? (
                             <Button
                               variant="ghost"
@@ -347,7 +359,7 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                               className="text-success hover:text-success"
                               onClick={() => refund(order)}
                               disabled={actionLoading === order.id + "refund"}
-                              title="Refund"
+                              title="Refund customer wallet" aria-label="Refund customer wallet"
                             >
                               {actionLoading === order.id + "refund" ? <Loader2 className="animate-spin" /> : <Undo2 />}
                             </Button>
@@ -390,14 +402,10 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                         ))}
                       </SelectContent>
                     </Select>
-                    {canCancel(order.status) ? (
-                      <Button variant="outline" size="sm" className="text-destructive" onClick={() => runOrderAction(order, "Cancel", () => cancelOrderAction(order.id))} disabled={actionLoading === order.id + "Cancel"}>
-                        {actionLoading === order.id + "Cancel" ? <Loader2 className="animate-spin" /> : <XCircle />} Cancel
-                      </Button>
-                    ) : null}
+                    {providerButton(order)}
                     {order.status !== "refunded" ? (
                       <Button variant="outline" size="sm" className="text-success" onClick={() => refund(order)} disabled={actionLoading === order.id + "refund"}>
-                        {actionLoading === order.id + "refund" ? <Loader2 className="animate-spin" /> : <Undo2 />} Refund
+                        {actionLoading === order.id + "refund" ? <Loader2 className="animate-spin" /> : <Undo2 />} Refund customer wallet
                       </Button>
                     ) : null}
                   </div>
@@ -408,6 +416,23 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!providerTarget} onOpenChange={open => { if (!open && !actionLoading) setProviderTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request provider refund</DialogTitle>
+            <DialogDescription>
+              Send a cancellation request to {providerTarget?.providerName} for panel order #{providerTarget?.order_number}
+              {" "}(provider order {providerTarget?.provider_order_id}). The provider decides whether the order can be cancelled.
+              Wallet settlement follows the final provider status.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" disabled={!!actionLoading} onClick={() => setProviderTarget(null)}>Back</Button>
+            <Button disabled={!!actionLoading} onClick={requestProviderRefund}>Send to provider</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={retryTarget !== null} onOpenChange={(open) => !open && setRetryTarget(null)}>
         <DialogContent>

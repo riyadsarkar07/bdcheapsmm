@@ -13,7 +13,7 @@ export default async function AdminOrdersPage() {
   const supabase = await createClient();
   const { data: orders } = await supabase
     .from("orders")
-    .select("id, order_number, user_id, profiles(full_name, email), services(name, provider_price), charge, provider_id, provider_order_id, quantity, price, status, created_at, currency")
+    .select("id, order_number, user_id, profiles(full_name, email), services(name, provider_price), charge, provider_id, providers(name), cancel_count, provider_order_id, quantity, price, status, created_at, currency")
     .order("created_at", { ascending: false })
     .limit(500);
 
@@ -24,6 +24,8 @@ export default async function AdminOrdersPage() {
     profiles: order.profiles,
     services: order.services ? { name: order.services.name } : null,
     provider_id: order.provider_id,
+    providerName: order.providers?.name ?? "Assigned provider",
+    requested: (order.cancel_count ?? 0) > 0,
     provider_order_id: order.provider_order_id,
     quantity: order.quantity,
     price: order.price,

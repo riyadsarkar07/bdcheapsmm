@@ -6,7 +6,7 @@ import { fail, ok, requireUser, isAdminProfile, type ActionResult } from "@/lib/
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { generateOrderNumber, formatCurrency } from "@/lib/utils";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { providerApi } from "@/lib/provider/smmfollow";
+import { providerApi, ProviderCancelRejected } from "@/lib/provider/smmfollow";
 import { parseChargeError } from "@/lib/pricing";
 import { assertOrderPricingSafety } from "@/lib/pricing-safety";
 import { writeLog } from "@/lib/audit";
@@ -328,15 +328,31 @@ export async function cancelOrderAction(orderId: string): Promise<ActionResult> 
     return fail("This order cannot be cancelled.");
   }
   if (!order.provider_order_id || !order.provider_id) return fail("Provider submission is pending. Please check again shortly.");
-  const { data: provider } = await createAdminClient().from("providers")
+  const admin = createAdminClient();
+  const { data: provider } = await admin.from("providers")
     .select("id, name, api_url, api_key").eq("id", order.provider_id).single();
-  if (!provider) return fail("Provider unavailable. Please try again later.");
+  if (!provider?.api_key || !provider.api_url) return fail("Provider is not configured.");
+  // Claim the request before contacting the provider, including across admin and customer sessions.
+  const claim = await admin.from("orders").update({ cancel_count: 1 })
+    .eq("id", orderId).eq("provider_id", provider.id).eq("provider_order_id", order.provider_order_id)
+    .in("status", ["pending", "processing", "in_progress"])
+    .or("cancel_count.is.null,cancel_count.eq.0").select("id").maybeSingle();
+  if (claim.error) return fail("Could not record the request. Try again shortly.");
+  if (!claim.data) return fail("A request is already recorded or the order status changed. Refresh the order.");
   try {
     await providerApi.cancel(provider, order.provider_order_id);
-    return ok(undefined, "Cancellation requested. Your wallet will be credited once the provider confirms.");
   } catch (err) {
-    return fail((err as Error).message);
+    if (err instanceof ProviderCancelRejected) {
+      const released = await admin.from("orders").update({ cancel_count: 0 })
+        .eq("id", orderId).eq("provider_order_id", order.provider_order_id).eq("cancel_count", 1);
+      if (released.error) return fail("Provider declined the request. Check the provider order before retrying.");
+      return fail(err.message);
+    }
+    return fail("Provider receipt is unknown. Check the provider order before sending another request.");
   }
+  await writeLog({ userId: user.id, action: "order_cancel", entityType: "orders", entityId: orderId,
+    description: `Provider ${provider.name} acknowledged cancellation request for #${order.order_number}.` });
+  return ok(undefined, `Request accepted by ${provider.name}. Awaiting final provider status.`);
 }
 
 export async function refreshOrderStatusAction(

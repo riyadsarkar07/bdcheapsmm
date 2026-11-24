@@ -43,6 +43,8 @@ export interface ProviderBalanceResult {
   message?: string;
 }
 
+export class ProviderCancelRejected extends Error {}
+
 export class ProviderError extends Error {
   status?: number;
   constructor(message: string, status?: number) {
@@ -304,8 +306,11 @@ export const providerApi = {
     const raw = await post(provider, "cancel", { orders: providerOrderId });
     const row = asRecord(Array.isArray(raw) ? raw.find((item) => String(item?.order) === String(providerOrderId)) : raw);
     const accepted = row.cancel ?? row.cancelled;
+    if (row.error || asRecord(accepted).error || [0, "0", false].includes(accepted as number | string | boolean)) {
+      throw new ProviderCancelRejected("Provider declined the request. Check cancellation eligibility or contact provider support.");
+    }
     if (![1, "1", true].includes(accepted as number | string | boolean)) {
-      throw new Error("Provider did not accept cancellation. The order is still active.");
+      throw new Error("Provider acknowledgement could not be verified.");
     }
     return { cancelled: true };
   },
