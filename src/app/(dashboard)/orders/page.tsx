@@ -1,3 +1,4 @@
+import { CustomerText } from "@/components/customer-language";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/guards";
@@ -42,7 +43,7 @@ export default async function OrdersPage({
       >
         <Button asChild variant="gradient">
           <Link href="/services">
-            <Plus /> New Order
+            <Plus /> <CustomerText value="New Order" />
           </Link>
         </Button>
       </PageHeader>

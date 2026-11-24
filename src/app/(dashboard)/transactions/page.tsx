@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { CustomerText } from "@/components/customer-language";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/guards";
 import { PageHeader } from "@/components/page-header";
@@ -6,50 +8,40 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TransactionTypeBadge } from "@/components/status-badges";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
-import { FileDown, History, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import { FileDown, History, Wallet, TrendingUp, TrendingDown } from "lucide-react";
 import type { TransactionType } from "@/lib/types/database";
 
 export const revalidate = 0;
 
-export default async function TransactionsPage() {
+export default async function TransactionsPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   const { user, error } = await requireUser();
   if (error || !user) return null;
 
+  const requested = Number((await searchParams).page);
+  const page = Number.isSafeInteger(requested) && requested > 0 ? requested : 1;
+  const size = 50;
   const supabase = await createClient();
-  const [{ data: transactions }, { data: approvedDeposits }] = await Promise.all([
+  const [{ data: rows, error: ledgerError }, { data: approvedDeposits }, { data: totals }] = await Promise.all([
     supabase
       .from("transactions")
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
-      .limit(200),
+      .order("id").range((page - 1) * size, page * size),
     supabase
       .from("payment_requests")
       .select("id")
       .eq("user_id", user.id)
       .eq("status", "approved"),
+    supabase.from("transactions").select("type,amount").eq("user_id", user.id).order("created_at", { ascending: false }).limit(200),
   ]);
 
+  const transactions = rows?.slice(0, size);
   const approvedDepositIds = new Set((approvedDeposits ?? []).map((p) => p.id));
 
-  const deposits = (transactions ?? []).filter((t) => t.type === "deposit").reduce((s, t) => s + Number(t.amount), 0);
-  const spent = (transactions ?? []).filter((t) => t.type === "order_deduction").reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
-
   const summary = [
-    {
-      label: "Total Deposits",
-      value: formatCurrency(deposits, user.currency),
-      icon: TrendingUp,
-      tone: "text-success",
-      bg: "bg-success/10",
-    },
-    {
-      label: "Total Spent",
-      value: formatCurrency(spent, user.currency),
-      icon: TrendingDown,
-      tone: "text-destructive",
-      bg: "bg-destructive/10",
-    },
+    { label: "Total Deposits", value: formatCurrency((totals ?? []).reduce((n,t) => n + (t.type === "deposit" ? Number(t.amount) : 0),0), user.currency), icon: TrendingUp, tone: "text-success", bg: "bg-success/10" },
+    { label: "Total Spent", value: formatCurrency((totals ?? []).reduce((n,t) => n + (t.type === "order_deduction" ? Math.abs(t.amount) : 0),0), user.currency), icon: TrendingDown, tone: "text-destructive", bg: "bg-destructive/10" },
     {
       label: "Current Balance",
       value: formatCurrency(user.balance, user.currency),
@@ -59,6 +51,12 @@ export default async function TransactionsPage() {
     },
   ];
 
+  function entry(tx: NonNullable<typeof rows>[number]) {
+    if (tx.reference_type !== "orders" || !tx.reference_id) return tx.description ?? "—";
+    const number = tx.description?.match(/#([A-Za-z0-9_-]+)/)?.[1];
+    const label = tx.type === "refund" ? "Refund for order" : "Order charge";
+    return <Link className="text-primary underline" href={`/orders/${tx.reference_id}`}>{number && ["order_deduction","refund"].includes(tx.type) ? <><CustomerText value={label} /> #{number}</> : tx.description || <CustomerText value="View order" />}</Link>;
+  }
   return (
     <div>
       <PageHeader
@@ -75,14 +73,14 @@ export default async function TransactionsPage() {
               <item.icon className="h-5 w-5" />
             </span>
             <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">{item.label}</p>
+              <p className="text-xs text-muted-foreground"><CustomerText value={item.label} /></p>
               <p className={`truncate text-lg font-bold tabular-nums ${item.tone}`}>{item.value}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {(transactions ?? []).length === 0 ? (
+      {ledgerError ? <p role="alert">Could not load transactions.</p> : (transactions ?? []).length === 0 ? (
         <EmptyState
           icon={History}
           title="No transactions yet"
@@ -96,12 +94,12 @@ export default async function TransactionsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/30">
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Type</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Description</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Amount</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Balance</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Date</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Invoice</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground"><CustomerText value="Type" /></th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground"><CustomerText value="Description" /></th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground"><CustomerText value="Amount" /></th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground"><CustomerText value="Balance" /></th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground"><CustomerText value="Date" /></th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground"><CustomerText value="Invoice" /></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -111,7 +109,7 @@ export default async function TransactionsPage() {
                         <TransactionTypeBadge type={tx.type as TransactionType} />
                       </td>
                       <td className="max-w-[320px] px-4 py-3">
-                        <span className="line-clamp-1">{tx.description ?? "—"}</span>
+                        <span className="line-clamp-1">{entry(tx)}</span>
                       </td>
                       <td className="px-4 py-3 text-right font-semibold tabular-nums">
                         <span className={tx.amount >= 0 ? "text-success" : "text-destructive"}>
@@ -158,7 +156,7 @@ export default async function TransactionsPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <TransactionTypeBadge type={tx.type as TransactionType} />
-                      <p className="mt-1 line-clamp-2 text-sm">{tx.description ?? "—"}</p>
+                      <p className="mt-1 line-clamp-2 text-sm">{entry(tx)}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">{formatDateTime(tx.created_at)}</p>
                     </div>
                     <div className="shrink-0 text-right">
@@ -180,7 +178,7 @@ export default async function TransactionsPage() {
                           download={`invoice-${tx.reference_id}.pdf`}
                           className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-primary"
                         >
-                          <FileDown className="h-3 w-3" /> Invoice
+                          <FileDown className="h-3 w-3" /> <CustomerText value="Invoice" />
                         </a>
                       ) : null}
                     </div>
@@ -191,6 +189,10 @@ export default async function TransactionsPage() {
           </CardContent>
         </Card>
       )}
+      <nav className="mt-4 flex gap-4 text-sm text-primary">
+        {page > 1 && <Link href={`/transactions?page=${page - 1}`}>← <CustomerText value="Newer transactions" /></Link>}
+        {(rows?.length ?? 0) > size && <Link href={`/transactions?page=${page + 1}`}><CustomerText value="Older transactions" /> →</Link>}
+      </nav>
     </div>
   );
 }

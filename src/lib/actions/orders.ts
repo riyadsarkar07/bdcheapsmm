@@ -7,7 +7,8 @@ import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { generateOrderNumber, formatCurrency } from "@/lib/utils";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { providerApi, ProviderCancelRejected, ProviderRefillRejected } from "@/lib/provider/smmfollow";
-import { parseChargeError } from "@/lib/pricing";
+import { targetLinkError } from "@/lib/order-link";
+import { detectPlatform, parseChargeError } from "@/lib/pricing";
 import { assertOrderPricingSafety } from "@/lib/pricing-safety";
 import { refillTerms } from "@/lib/refill-terms";
 import { writeLog } from "@/lib/audit";
@@ -114,7 +115,7 @@ async function placeOrder({
 
   const { data: service, error: serviceError } = await supabase
     .from("services")
-    .select("id, name, category_id, provider_id, provider_service_id, price, provider_price, min_quantity, max_quantity, type, is_active")
+    .select("id, name, categories(name,slug), category_id, provider_id, provider_service_id, price, provider_price, min_quantity, max_quantity, type, is_active")
     .eq("id", serviceId)
     .maybeSingle();
 
@@ -128,6 +129,8 @@ async function placeOrder({
     return fail("This service has no provider attached.");
   }
 
+  const linkError = targetLinkError(link, detectPlatform(service.categories?.name, service.categories?.slug));
+  if (linkError) return fail(linkError);
   const qty = quantity;
   if (qty < service.min_quantity || qty > service.max_quantity) {
     return fail(

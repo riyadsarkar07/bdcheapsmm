@@ -17,6 +17,7 @@ import {
   Lightbulb,
   CircleHelp,
 } from "lucide-react";
+import { LanguageSwitch, useCustomerText } from "@/components/customer-language";
 import { NotificationsButton } from "@/components/layout/notifications-button";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import type { Profile } from "@/lib/types/database";
@@ -32,6 +33,7 @@ export function AppShell({
   unreadNotices?: number;
   children: React.ReactNode;
 }) {
+  const t = useCustomerText();
   const isAdmin = profile.role === "admin" && profile.status === "active";
 
   const groups = [
@@ -73,11 +75,11 @@ export function AppShell({
   return (
     <DashboardShell
       profile={profile}
-      groups={groups}
-      headerExtras={<NotificationsButton />}
+      groups={groups.map(group => ({ label: t(group.label), items: group.items.map(item => ({ ...item, label: t(item.label) })) }))}
+      headerExtras={<><LanguageSwitch /><NotificationsButton /></>}
       footerItem={
         isAdmin
-          ? { href: "/admin", label: "Admin Panel", icon: Shield }
+          ? { href: "/admin", label: t("Admin Panel"), icon: Shield }
           : undefined
       }
     >

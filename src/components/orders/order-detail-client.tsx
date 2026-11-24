@@ -1,5 +1,6 @@
 "use client";
 
+import { CustomerText } from "@/components/customer-language";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -169,7 +170,7 @@ export function OrderDetailClient({
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="eyebrow mb-1">Order details</p>
+          <p className="eyebrow mb-1"><CustomerText value="Order details" /></p>
           <h1 className="truncate text-2xl font-bold">Order #{orderState.order_number}</h1>
           <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{orderState.services?.name}</p>
         </div>
@@ -191,7 +192,7 @@ export function OrderDetailClient({
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <Clock className="h-4 w-4 text-primary" /> Delivery progress
+                <Clock className="h-4 w-4 text-primary" /> <CustomerText value="Delivery progress" />
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -218,7 +219,7 @@ export function OrderDetailClient({
               {progress != null && <Progress value={progress} className="h-2.5" />}
               {orderState.status === "completed" ? (
                 <p className="mt-2 flex items-center gap-1.5 text-xs text-success">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> Delivery complete
+                  <CheckCircle2 className="h-3.5 w-3.5" /> <CustomerText value="Delivery complete" />
                 </p>
               ) : null}
             </CardContent>
@@ -227,14 +228,14 @@ export function OrderDetailClient({
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <Hash className="h-4 w-4 text-primary" /> Order Details
+                <Hash className="h-4 w-4 text-primary" /> <CustomerText value="Order Details" />
               </CardTitle>
             </CardHeader>
             <CardContent>
               <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
                 {details.map((item) => (
                   <div key={item.label} className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
-                    <dt className="text-xs text-muted-foreground">{item.label}</dt>
+                    <dt className="text-xs text-muted-foreground"><CustomerText value={item.label} /></dt>
                     <dd className="flex min-w-0 items-center gap-1 text-right text-sm font-medium">
                       <span className="max-w-[180px] truncate">{item.value}</span>
                       {item.copy ? <CopyButton value={item.copy} label={`Copy ${item.label}`} /> : null}
@@ -246,7 +247,7 @@ export function OrderDetailClient({
               <Separator className="my-4" />
 
               <div className="flex flex-col gap-2">
-                <p className="eyebrow">Target link</p>
+                <p className="eyebrow"><CustomerText value="Target link" /></p>
                 <div className="flex items-center gap-2 rounded-lg border p-3">
                   <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1 truncate text-sm">{orderState.link}</span>
@@ -269,20 +270,20 @@ export function OrderDetailClient({
         <Card className="h-fit lg:sticky lg:top-24">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <Layers className="h-4 w-4 text-primary" /> Actions
+              <Layers className="h-4 w-4 text-primary" /> <CustomerText value="Actions" />
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2.5">
             {isOwner && (
               <>
-                <Button asChild variant="outline"><Link href={`/support/new?order=${orderState.id}`}>Get order support</Link></Button>
-                {orderState.service_id && <Button asChild variant="gradient"><Link href={`/services/${orderState.service_id}?repeat=${orderState.id}`}>Order again</Link></Button>}
+                <Button asChild variant="outline"><Link href={`/support/new?order=${orderState.id}`}><CustomerText value="Get order support" /></Link></Button>
+                {orderState.service_id && <Button asChild variant="gradient"><Link href={`/services/${orderState.service_id}?repeat=${orderState.id}`}><CustomerText value="Order again" /></Link></Button>}
               </>
             )}
             <Button asChild variant="gradient" className="w-full justify-start">
               <a href={`/api/orders/${orderState.id}/invoice`} download={`invoice-${orderState.order_number}.pdf`}>
                 <FileDown />
-                Download Invoice
+                <CustomerText value="Download Invoice" />
               </a>
             </Button>
             <Button
@@ -292,7 +293,7 @@ export function OrderDetailClient({
               disabled={action !== null}
             >
               {action === "refresh" ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-              Refresh Status
+              <CustomerText value="Refresh Status" />
             </Button>
             <Button
               variant="warning"
@@ -301,9 +302,9 @@ export function OrderDetailClient({
               disabled={action !== null || !canRefill || refillDisabled || !order.provider_order_id || (order.refill_count ?? 0) >= 2}
             >
               {action === "refill" ? <Loader2 className="animate-spin" /> : <RotateCcw />}
-              {refillDisabled ? "Refill unavailable" : "Request refill"}
+              <CustomerText value={refillDisabled ? "Refill unavailable" : "Request refill"} />
             </Button>
-            <p className="text-xs text-muted-foreground">Refill: {refillLabel}</p>
+            <p className="text-xs text-muted-foreground"><CustomerText value="Refill:" /> <CustomerText value={refillLabel} /></p>
             <Button
               variant="destructive"
               className="w-full justify-start"
@@ -311,7 +312,7 @@ export function OrderDetailClient({
               disabled={action !== null || !canCancel}
             >
               {action === "cancel" ? <Loader2 className="animate-spin" /> : <XCircle />}
-              Cancel Order
+              <CustomerText value="Cancel Order" />
             </Button>
             <Button
               variant="success"
@@ -320,7 +321,7 @@ export function OrderDetailClient({
               disabled={action !== null || !canRetry}
             >
               <Zap />
-              Retry Order
+              <CustomerText value="Retry Order" />
             </Button>
 
             <Separator className="my-2" />
@@ -384,7 +385,7 @@ export function OrderDetailClient({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Zap className="h-4 w-4 text-primary" />
-              Retry Order
+              <CustomerText value="Retry Order" />
             </DialogTitle>
             <DialogDescription>
               Create a brand-new order with the same service and quantity, but a
@@ -394,19 +395,19 @@ export function OrderDetailClient({
           <form onSubmit={handleRetry} className="space-y-4">
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="rounded-lg bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">Order Number</p>
+                <p className="text-xs text-muted-foreground"><CustomerText value="Order Number" /></p>
                 <p className="font-medium">#{orderState.order_number}</p>
               </div>
               <div className="rounded-lg bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">Quantity</p>
+                <p className="text-xs text-muted-foreground"><CustomerText value="Quantity" /></p>
                 <p className="font-medium">{orderState.quantity.toLocaleString()}</p>
               </div>
               <div className="col-span-2 rounded-lg bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">Service</p>
+                <p className="text-xs text-muted-foreground"><CustomerText value="Service" /></p>
                 <p className="line-clamp-1 font-medium">{orderState.services?.name ?? "—"}</p>
               </div>
               <div className="rounded-lg bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">Price</p>
+                <p className="text-xs text-muted-foreground"><CustomerText value="Price" /></p>
                 <p className="font-medium">{formatCurrency(orderState.price, orderState.currency)}</p>
               </div>
               <div className="rounded-lg bg-muted/50 p-3">
@@ -437,7 +438,7 @@ export function OrderDetailClient({
                 onClick={() => setRetryOpen(false)}
                 disabled={action === "retry"}
               >
-                Cancel
+                <CustomerText value="Cancel" />
               </Button>
               <Button type="submit" variant="success" disabled={action === "retry"}>
                 {action === "retry" ? <Loader2 className="animate-spin" /> : <Zap />}
@@ -462,7 +463,7 @@ export function OrderDetailClient({
       ) : null}
 
       <Button asChild variant="link" className="-ml-2">
-        <Link href="/orders">View all orders</Link>
+        <Link href="/orders"><CustomerText value="View all orders" /></Link>
       </Button>
     </motion.div>
   );

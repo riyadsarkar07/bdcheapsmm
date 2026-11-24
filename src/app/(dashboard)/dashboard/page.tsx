@@ -1,3 +1,4 @@
+import { CustomerText } from "@/components/customer-language";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/guards";
@@ -70,6 +71,7 @@ export default async function DashboardPage() {
     weekSpendingRes,
     walletActivityRes,
     noticesRes,
+    activeOrdersRes,
   ] = await Promise.all([
     supabase.from("orders").select("id", { count: "exact", head: true }).eq("user_id", user.id),
     supabase.from("orders").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", startOfToday),
@@ -102,6 +104,8 @@ export default async function DashboardPage() {
       .eq("is_published", true)
       .order("published_at", { ascending: false })
       .limit(3),
+    supabase.from("orders").select("id,order_number,status,provider_order_id,provider_status:provider_response->>status,checked_at:provider_response->>panel_checked_at,services(name)")
+      .eq("user_id", user.id).in("status", ["pending","processing","in_progress"]).order("created_at", { ascending: false }).limit(8),
   ]);
 
   // Surface failures server-side without breaking the whole page.
@@ -170,16 +174,26 @@ export default async function DashboardPage() {
       >
         <Button asChild variant="outline">
           <Link href="/transactions">
-            <TrendingUp /> Transactions
+            <TrendingUp /> <CustomerText value="Transactions" />
           </Link>
         </Button>
         <Button asChild variant="gradient">
           <Link href="/services">
-            <Layers /> New Order
+            <Layers /> <CustomerText value="New Order" />
           </Link>
         </Button>
       </PageHeader>
 
+      <section className="glass-card rounded-xl p-4">
+        <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold"><CustomerText value="My active orders" /></h2>
+          <Link className="text-sm text-primary" href="/orders"><CustomerText value="View all orders" /></Link></div>
+        {activeOrdersRes.error ? <CustomerText value="Could not load active orders." /> : !activeOrdersRes.data?.length ? <CustomerText value="No active orders" /> :
+          activeOrdersRes.data.map(order => <Link className="flex flex-wrap items-center justify-between gap-2 border-t py-2 text-sm" href={`/orders/${order.id}`} key={order.id}>
+            <span>#{order.order_number} · {order.services?.name}</span>
+            <OrderStatusBadge status={order.status} providerStatus={order.provider_status || (order.provider_order_id ? "Awaiting provider status" : null)} />
+            <span className="text-xs text-muted-foreground"><CustomerText value="Last provider check" /> · {order.checked_at ? new Date(order.checked_at).toLocaleString("en-GB", {timeZone: "Asia/Dhaka"}) + " (Dhaka)" : <CustomerText value="Not checked yet" />}</span>
+          </Link>)}
+      </section>
       {/* Wallet hero + primary stats */}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="relative overflow-hidden rounded-2xl gradient-bg p-5 text-white shadow-glow lg:col-span-1">
@@ -194,7 +208,7 @@ export default async function DashboardPage() {
           <div className="relative">
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-2 text-sm font-medium text-white/80">
-                <Wallet className="h-4 w-4" /> Wallet balance
+                <Wallet className="h-4 w-4" /> <CustomerText value="Wallet balance" />
               </span>
               <Badge className="border-white/20 bg-white/15 text-white">
                 {user.currency}
@@ -210,12 +224,12 @@ export default async function DashboardPage() {
             <div className="mt-4 flex items-center gap-2">
               <Button asChild size="sm" className="bg-white text-primary hover:bg-white/90">
                 <Link href="/add-funds">
-                  <ArrowDownToLine /> Add Funds
+                  <ArrowDownToLine /> <CustomerText value="Add Funds" />
                 </Link>
               </Button>
               <Button asChild size="sm" variant="ghost" className="text-white hover:bg-white/15">
                 <Link href="/transactions">
-                  History <ArrowUpRight />
+                  <CustomerText value="History" /> <ArrowUpRight />
                 </Link>
               </Button>
             </div>
@@ -268,9 +282,9 @@ export default async function DashboardPage() {
         <Card className="lg:col-span-2">
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <div>
-              <CardTitle className="text-base">Spending — last 7 days</CardTitle>
+              <CardTitle className="text-base"><CustomerText value="Spending — last 7 days" /></CardTitle>
               <p className="mt-1 text-xs text-muted-foreground">
-                Total this week:{" "}
+                <CustomerText value="Total this week:" />{" "}
                 <span className="font-semibold text-foreground">{formatCurrency(weekTotal, user.currency)}</span>
               </p>
             </div>
@@ -285,12 +299,12 @@ export default async function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Order status</CardTitle>
+            <CardTitle className="text-base"><CustomerText value="Order status" /></CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {totalOrders === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">
-                No orders yet.
+                <CustomerText value="No orders yet." />
               </p>
             ) : (
               statusBreakdown.map((s) => {
@@ -298,7 +312,7 @@ export default async function DashboardPage() {
                 return (
                   <div key={s.label} className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-medium">{s.label}</span>
+                      <span className="font-medium"><CustomerText value={s.label} /></span>
                       <span className="tabular-nums text-muted-foreground">
                         {s.value} · {pct}%
                       </span>
@@ -321,7 +335,7 @@ export default async function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Quick actions</CardTitle>
+            <CardTitle className="text-base"><CustomerText value="Quick actions" /></CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {quickActions.map((action) => (
@@ -333,7 +347,7 @@ export default async function DashboardPage() {
                 <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:gradient-bg group-hover:text-white">
                   <action.icon className="h-4 w-4" />
                 </span>
-                <span className="text-sm font-semibold leading-tight">{action.label}</span>
+                <span className="text-sm font-semibold leading-tight"><CustomerText value={action.label} /></span>
                 <span className="text-[11px] text-muted-foreground">{action.description}</span>
               </Link>
             ))}
@@ -342,15 +356,15 @@ export default async function DashboardPage() {
 
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">Wallet activity</CardTitle>
+            <CardTitle className="text-base"><CustomerText value="Wallet activity" /></CardTitle>
             <Button asChild variant="ghost" size="sm">
-              <Link href="/transactions">All</Link>
+              <Link href="/transactions"><CustomerText value="All" /></Link>
             </Button>
           </CardHeader>
           <CardContent className="p-0">
             {walletActivity.length === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                No wallet activity yet.
+                <CustomerText value="No wallet activity yet." />
               </p>
             ) : (
               <ul className="divide-y">
@@ -392,7 +406,7 @@ export default async function DashboardPage() {
             </CardTitle>
             <Button asChild variant="ghost" size="sm">
               <Link href="/notices">
-                View all <ArrowRight />
+                <CustomerText value="View all" /> <ArrowRight />
               </Link>
             </Button>
           </CardHeader>
@@ -422,14 +436,14 @@ export default async function DashboardPage() {
       <div>
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-semibold">Recent Orders</h2>
+            <h2 className="text-lg font-semibold"><CustomerText value="Recent Orders" /></h2>
             <p className="text-xs text-muted-foreground">
               {totalOrders} order{totalOrders === 1 ? "" : "s"} placed in total
             </p>
           </div>
           <Button asChild variant="ghost" size="sm">
             <Link href="/orders">
-              View all <ArrowRight />
+              <CustomerText value="View all" /> <ArrowRight />
             </Link>
           </Button>
         </div>
@@ -454,12 +468,12 @@ export default async function DashboardPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b bg-muted/30">
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Order</th>
-                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Service</th>
+                      <th className="px-4 py-3 text-left font-medium text-muted-foreground"><CustomerText value="Order" /></th>
+                      <th className="px-4 py-3 text-left font-medium text-muted-foreground"><CustomerText value="Service" /></th>
                       <th className="px-4 py-3 text-right font-medium text-muted-foreground">Qty</th>
-                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Amount</th>
+                      <th className="px-4 py-3 text-right font-medium text-muted-foreground"><CustomerText value="Amount" /></th>
                       <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-                      <th className="px-4 py-3 text-right font-medium text-muted-foreground">Date</th>
+                      <th className="px-4 py-3 text-right font-medium text-muted-foreground"><CustomerText value="Date" /></th>
                     </tr>
                   </thead>
                   <tbody>

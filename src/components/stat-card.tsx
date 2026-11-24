@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { motion, useReducedMotion } from "framer-motion";
+import { CustomerText } from "@/components/customer-language";
 import { cn } from "@/lib/utils";
 
 interface StatCardProps {
@@ -72,13 +73,13 @@ export function StatCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1.5">
           <p className="truncate text-xs font-medium text-muted-foreground sm:text-sm">
-            {title}
+            <CustomerText value={title} />
           </p>
           <p className="tabular truncate text-xl font-bold tracking-tight sm:text-2xl">
             {value}
           </p>
           {description ? (
-            <p className="truncate text-xs text-muted-foreground">{description}</p>
+            <p className="truncate text-xs text-muted-foreground"><CustomerText value={description} /></p>
           ) : null}
           {footer}
         </div>

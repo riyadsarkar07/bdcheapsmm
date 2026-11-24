@@ -1,3 +1,4 @@
+import { CustomerText } from "@/components/customer-language";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -77,9 +78,9 @@ export default async function OrderDetailPage({
         profit={profit}
       />
       <section className="mt-5 space-y-3 rounded-xl border bg-card p-5">
-        <h2 className="font-semibold">Refill and refund history</h2>
+        <h2 className="font-semibold"><CustomerText value="Refill and refund history" /></h2>
         {history.map(event => <div key={event.id} className="text-sm"><time className="text-muted-foreground">{new Date(event.created_at).toLocaleString("en-GB", { timeZone: "Asia/Dhaka" })} (Dhaka)</time> · {event.text}</div>)}
-        {(events.error || credits.error) ? <p>Some history could not be loaded.</p> : history.length === 0 && <p className="text-sm text-muted-foreground">No refill or refund activity recorded.</p>}
+        {(events.error || credits.error) ? <p>Some history could not be loaded.</p> : history.length === 0 && <p className="text-sm text-muted-foreground"><CustomerText value="No refill or refund activity recorded." /></p>}
       </section>
     </div>
   );

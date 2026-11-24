@@ -1,5 +1,6 @@
 "use client";
 
+import { CustomerText } from "@/components/customer-language";
 import * as React from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -120,15 +121,15 @@ export function OrdersList({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="processing">Processing</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="partial">Partial</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-            <SelectItem value="refunded">Refunded</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
-            <SelectItem value="failed">Failed</SelectItem>
+            <SelectItem value="pending"><CustomerText value="Pending" /></SelectItem>
+            <SelectItem value="processing"><CustomerText value="Processing" /></SelectItem>
+            <SelectItem value="in_progress"><CustomerText value="In Progress" /></SelectItem>
+            <SelectItem value="completed"><CustomerText value="Completed" /></SelectItem>
+            <SelectItem value="partial"><CustomerText value="Partial" /></SelectItem>
+            <SelectItem value="cancelled"><CustomerText value="Cancelled" /></SelectItem>
+            <SelectItem value="refunded"><CustomerText value="Refunded" /></SelectItem>
+            <SelectItem value="rejected"><CustomerText value="Rejected" /></SelectItem>
+            <SelectItem value="failed"><CustomerText value="Failed" /></SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -147,11 +148,11 @@ export function OrdersList({
                 <thead>
                   <tr className="border-b bg-muted/30">
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Order #</th>
-                    <th className="px-4 py-3 text-left font-medium text-muted-foreground">Service</th>
+                    <th className="px-4 py-3 text-left font-medium text-muted-foreground"><CustomerText value="Service" /></th>
                     <th className="px-4 py-3 text-right font-medium text-muted-foreground">Qty</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Price</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground"><CustomerText value="Price" /></th>
                     <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-                    <th className="px-4 py-3 text-right font-medium text-muted-foreground">Date</th>
+                    <th className="px-4 py-3 text-right font-medium text-muted-foreground"><CustomerText value="Date" /></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -224,7 +225,7 @@ export function OrdersList({
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={safePage === 0}
             >
-              <ChevronLeft /> Prev
+              <ChevronLeft /> <CustomerText value="Prev" />
             </Button>
             <Button
               variant="outline"
@@ -232,7 +233,7 @@ export function OrdersList({
               onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
               disabled={safePage >= pageCount - 1}
             >
-              Next <ChevronRight />
+              <CustomerText value="Next" /> <ChevronRight />
             </Button>
           </div>
         </div>

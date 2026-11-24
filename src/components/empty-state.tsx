@@ -1,3 +1,4 @@
+import { CustomerText } from "@/components/customer-language";
 import { cn } from "@/lib/utils";
 import { PackageOpen } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -27,9 +28,9 @@ export function EmptyState({
       <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
         <Icon className="h-7 w-7" />
       </div>
-      <h3 className="text-base font-semibold">{title}</h3>
+      <h3 className="text-base font-semibold"><CustomerText value={title} /></h3>
       {description ? (
-        <p className="mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>
+        <p className="mt-1 max-w-sm text-sm text-muted-foreground"><CustomerText value={description} /></p>
       ) : null}
       {action ? <div className="mt-5">{action}</div> : null}
     </div>

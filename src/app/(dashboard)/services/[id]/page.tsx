@@ -3,13 +3,14 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/guards";
 import { refillTerms } from "@/lib/refill-terms";
+import { targetExample } from "@/lib/order-link";
 import { OrderForm } from "@/components/services/order-form";
 import { CategoryIcon } from "@/components/category-icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Clock, Minus, Plus, Info } from "lucide-react";
 import { formatUsd } from "@/lib/utils";
-import { detectPlatform, exampleLinkForPlatform } from "@/lib/pricing";
+import { detectPlatform } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -128,6 +129,7 @@ export default async function ServiceOrderPage({
             key={repeat ?? service.id}
             serviceId={service.id}
             previous={previous}
+            platform={detectPlatform(service.categories?.name, service.categories?.slug)}
             serviceName={service.name}
               refillLabel={refillTerms(service.meta, service.name, service.description ?? "").label}
             pricePerUnit={Number(service.price)}
@@ -135,8 +137,8 @@ export default async function ServiceOrderPage({
             maxQuantity={service.max_quantity}
             balance={user.balance}
             currency={user.currency}
-            linkPlaceholder={exampleLinkForPlatform(
-              detectPlatform(service.categories?.name, service.categories?.slug)
+            linkPlaceholder={targetExample(
+              detectPlatform(service.categories?.name, service.categories?.slug), service.type
             )}
             averageTime={service.average_time}
           />

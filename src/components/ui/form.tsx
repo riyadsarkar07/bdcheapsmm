@@ -1,5 +1,6 @@
 "use client";
 
+import { CustomerText } from "@/components/customer-language";
 import * as React from "react";
 import * as LabelPrimitive from "@radix-ui/react-label";
 import { Slot } from "@radix-ui/react-slot";
@@ -160,7 +161,7 @@ const FormMessage = React.forwardRef<
       className={cn("text-[0.8rem] font-medium text-destructive", className)}
       {...props}
     >
-      {body}
+      {typeof body === "string" ? <CustomerText value={body} /> : body}
     </p>
   );
 });

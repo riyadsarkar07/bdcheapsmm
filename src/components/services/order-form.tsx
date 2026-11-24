@@ -1,5 +1,6 @@
 "use client";
 
+import { CustomerText } from "@/components/customer-language";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -43,6 +44,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { targetLinkError } from "@/lib/order-link";
+import { useCustomerText } from "@/components/customer-language";
 import { Badge } from "@/components/ui/badge";
 
 const formSchema = z.object({
@@ -61,6 +64,7 @@ const formSchema = z.object({
 interface OrderFormProps {
   serviceId: string;
   serviceName: string;
+  platform: string;
   refillLabel: string;
   /** Retail price per 1000 units (same as the provider rate + markup). */
   pricePerUnit: number;
@@ -77,6 +81,7 @@ interface OrderFormProps {
 export function OrderForm({
   serviceId,
   serviceName,
+  platform,
   refillLabel,
   pricePerUnit,
   minQuantity,
@@ -87,6 +92,7 @@ export function OrderForm({
   linkPlaceholder,
   averageTime,
 }: OrderFormProps) {
+  const t = useCustomerText();
   const router = useRouter();
   const queryClient = useQueryClient();
   const reduced = useReducedMotion();
@@ -100,7 +106,11 @@ export function OrderForm({
   const firstBillableQuantity = Math.max(minQuantity, Math.ceil(5 / pricePerUnit));
   const suggested = firstBillableQuantity <= maxQuantity ? firstBillableQuantity : minQuantity;
   const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(formSchema.superRefine((values, ctx) => {
+      const message = targetLinkError(values.link, platform);
+      if (message) ctx.addIssue({ code: "custom", path: ["link"], message: t(message) });
+    })),
+    mode: "onBlur",
     defaultValues: { quantity: Math.max(minQuantity, Math.min(maxQuantity, previous?.quantity ?? suggested)), link: previous?.link ?? "", coupon: "" },
   });
 
@@ -202,7 +212,7 @@ export function OrderForm({
       <div className="mb-5 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-lg font-bold">
-            <ShoppingCart className="h-5 w-5 text-primary" /> Place Order
+            <ShoppingCart className="h-5 w-5 text-primary" /> <CustomerText value="Place Order" />
           </h2>
           <p className="mt-1 break-words text-sm text-muted-foreground">{serviceName}</p>
         </div>
@@ -211,9 +221,9 @@ export function OrderForm({
         </Badge>
       </div>
 
-      <p className="mb-3 text-sm"><strong>Refill:</strong> {refillLabel}</p>
+      <p className="mb-3 text-sm"><strong><CustomerText value="Refill:" /></strong> {t(refillLabel)}</p>
       {previous && previous.quantity !== form.formState.defaultValues?.quantity && (
-        <p className="mb-3 text-sm text-muted-foreground">The service limits changed. Check the adjusted quantity before placing this order.</p>
+        <p className="mb-3 text-sm text-muted-foreground"><CustomerText value="The service limits changed. Check the adjusted quantity before placing this order." /></p>
       )}
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -223,7 +233,7 @@ export function OrderForm({
             render={({ field }) => (
               <FormItem>
                 <div className="flex items-center justify-between">
-                  <FormLabel>Quantity</FormLabel>
+                  <FormLabel><CustomerText value="Quantity" /></FormLabel>
                   <span className="text-[11px] text-muted-foreground">
                     {minQuantity.toLocaleString()} – {maxQuantity.toLocaleString()}
                   </span>
@@ -294,17 +304,18 @@ export function OrderForm({
             name="link"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Target Link</FormLabel>
+                <FormLabel><CustomerText value="Target Link" /></FormLabel>
                 <FormControl>
                   <div className="relative">
                     <Link2 className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                       className="pl-9"
-                      placeholder={linkPlaceholder ?? "https://www.instagram.com/p/..."}
+                      placeholder={linkPlaceholder}
                       {...field}
                     />
                   </div>
                 </FormControl>
+                <p className="break-all text-xs text-muted-foreground">{t("Example link")}: {linkPlaceholder}</p>
                 <FormMessage />
               </FormItem>
             )}
@@ -315,12 +326,12 @@ export function OrderForm({
             name="coupon"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Coupon (optional)</FormLabel>
+                <FormLabel><CustomerText value="Coupon (optional)" /></FormLabel>
                 <FormControl>
                   <div className="relative">
                     <Tag className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Discount code"
+                      placeholder={t("Discount code")}
                       className="pl-9"
                       onChange={(e) => {
                         field.onChange(e);
@@ -334,7 +345,7 @@ export function OrderForm({
                 </FormControl>
                 {coupon && (
                   <Button type="button" size="sm" variant="outline" disabled={loading || applied} onClick={applyCoupon}>
-                    {applied ? "Coupon applied" : "Apply coupon"}
+                    {t(applied ? "Coupon applied" : "Apply coupon")}
                   </Button>
                 )}
                 <FormMessage />
@@ -344,29 +355,29 @@ export function OrderForm({
 
           <div className="rounded-xl border bg-muted/40 p-4">
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Quantity</span>
+              <span className="text-muted-foreground"><CustomerText value="Quantity" /></span>
               <span className="font-medium tabular-nums">{quantity.toLocaleString()}</span>
             </div>
             <div className="mt-1.5 flex justify-between text-sm">
-              <span className="text-muted-foreground">Rate (per 1k)</span>
+              <span className="text-muted-foreground"><CustomerText value="Rate (per 1k)" /></span>
               <span className="tabular-nums">{formatUsd(pricePerUnit)}</span>
             </div>
-            <div className="mt-1.5 flex justify-between text-sm"><span>Quantity range</span><span>{minQuantity.toLocaleString()} – {maxQuantity.toLocaleString()}</span></div>
-            {applied && <div className="mt-1.5 flex justify-between text-sm text-success"><span>Coupon discount</span><span>−{formatCurrency(walletCharge(computeOrderCharge(pricePerUnit, quantity), currency) - total, currency)}</span></div>}
+            <div className="mt-1.5 flex justify-between text-sm"><span><CustomerText value="Quantity range" /></span><span>{minQuantity.toLocaleString()} – {maxQuantity.toLocaleString()}</span></div>
+            {applied && <div className="mt-1.5 flex justify-between text-sm text-success"><span><CustomerText value="Coupon discount" /></span><span>−{formatCurrency(walletCharge(computeOrderCharge(pricePerUnit, quantity), currency) - total, currency)}</span></div>}
               <div className="mt-1.5 flex items-center justify-between text-sm">
                 <span className="flex items-center gap-1 text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5" /> Est. delivery
+                  <Clock className="h-3.5 w-3.5" /> <CustomerText value="Est. delivery" />
                 </span>
-                <span>{averageTime || "Not provided"}</span>
+                <span>{averageTime || t("Not provided")}</span>
               </div>
             <div className="mt-2.5 flex items-center justify-between border-t pt-2.5">
-              <span className="font-medium">Wallet charge</span>
+              <span className="font-medium"><CustomerText value="Wallet charge" /></span>
               <span className="text-xl font-bold text-primary tabular-nums">
                 {Number.isFinite(total) ? formatCurrency(total, currency) : "Unavailable"}
               </span>
             </div>
             <div className="mt-2 flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Balance after order</span>
+              <span className="text-muted-foreground"><CustomerText value="Balance after order" /></span>
               <span className={insufficient ? "font-semibold text-destructive" : "font-semibold text-success"}>
                 {Number.isFinite(balanceAfter) ? formatCurrency(balanceAfter, currency) : "Unavailable"}
               </span>
@@ -375,12 +386,12 @@ export function OrderForm({
 
           {!chargeable && !needsQuote && (
             <div role="status" className="space-y-2 rounded-lg border p-3 text-sm">
-              <p>{!Number.isFinite(total) ? "No exchange rate is configured for your wallet currency."
+              <p>{t(!Number.isFinite(total) ? "No exchange rate is configured for your wallet currency."
                 : canIncrease ? "This quantity rounds to a $0.00 order. Increase the quantity to get a payable total."
-                : "This order has no payable total. Check the quantity, service or coupon."}</p>
+                : "This order has no payable total. Check the quantity, service or coupon.")}</p>
               {canIncrease && Number.isFinite(total) && (
                 <Button type="button" size="sm" variant="outline" onClick={() => form.setValue("quantity", firstBillableQuantity, { shouldValidate: true })}>
-                  Use quantity {firstBillableQuantity.toLocaleString()}
+                  <CustomerText value="Use quantity" /> {firstBillableQuantity.toLocaleString()}
                 </Button>
               )}
             </div>
@@ -391,16 +402,16 @@ export function OrderForm({
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                 <div className="space-y-1">
                   <p className="font-semibold text-destructive">
-                    Insufficient balance. Please add funds to place this order.
+                    <CustomerText value="Insufficient balance. Please add funds to place this order." />
                   </p>
                   <p className="text-muted-foreground">
-                    Required: {Number.isFinite(total) ? formatCurrency(total, currency) : "Unavailable"} · Current balance: {formatCurrency(balance, currency)}
+                    <CustomerText value="Required:" /> {Number.isFinite(total) ? formatCurrency(total, currency) : "Unavailable"} · {t("Current balance")}: {formatCurrency(balance, currency)}
                   </p>
                 </div>
               </div>
               <Button asChild variant="gradient" size="sm" className="w-full">
                 <a href="/add-funds">
-                  <Wallet /> Add Funds
+                  <Wallet /> <CustomerText value="Add Funds" />
                 </a>
               </Button>
             </div>
@@ -408,11 +419,11 @@ export function OrderForm({
 
           <Button type="submit" variant="gradient" className="w-full" disabled={loading || !chargeable || insufficient || needsQuote}>
             {loading ? <Loader2 className="animate-spin" /> : <Zap />}
-            {needsQuote ? "Apply coupon to review" : !chargeable ? "Review pricing" : insufficient ? "Insufficient Balance" : "Review Order"}
+            {t(needsQuote ? "Apply coupon to review" : !chargeable ? "Review pricing" : insufficient ? "Insufficient Balance" : "Review Order")}
           </Button>
           <p className="flex items-center justify-center gap-1.5 text-center text-[11px] text-muted-foreground">
             <ShieldCheck className="h-3.5 w-3.5" />
-            Secure checkout · charged from your wallet
+            <CustomerText value="Secure checkout · charged from your wallet" />
           </p>
         </form>
       </Form>
@@ -423,10 +434,10 @@ export function OrderForm({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-warning" />
-              Duplicate URL warning
+              <CustomerText value="Duplicate URL warning" />
             </DialogTitle>
             <DialogDescription>
-              This link already has an active order. Continuing may overlap delivery. Confirm only if this is intentional.
+              <CustomerText value="This link already has an active order. Continuing may overlap delivery. Confirm only if this is intentional." />
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
@@ -444,7 +455,7 @@ export function OrderForm({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setConflicts(null); setPendingValues(null); }}>
-              Cancel
+              <CustomerText value="Cancel" />
             </Button>
             <Button
               variant="gradient"
@@ -454,7 +465,7 @@ export function OrderForm({
                 setConflicts(null);
               }}
             >
-              Continue anyway
+              <CustomerText value="Continue anyway" />
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -466,40 +477,40 @@ export function OrderForm({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ShoppingCart className="h-5 w-5 text-primary" />
-              Confirm your order
+              <CustomerText value="Confirm your order" />
             </DialogTitle>
             <DialogDescription>
-              Review the details below. Your wallet is charged immediately after confirming.
+              <CustomerText value="Review the details below. Your wallet is charged immediately after confirming." />
             </DialogDescription>
           </DialogHeader>
           {confirmValues ? (
             <div className="space-y-2 text-sm">
               <div className="rounded-lg border p-3">
-                <p className="text-xs text-muted-foreground">Service</p>
+                <p className="text-xs text-muted-foreground"><CustomerText value="Service" /></p>
                 <p className="mt-0.5 line-clamp-2 font-medium">{serviceName}</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-lg bg-muted/50 p-3">
-                  <p className="text-xs text-muted-foreground">Quantity</p>
+                  <p className="text-xs text-muted-foreground"><CustomerText value="Quantity" /></p>
                   <p className="mt-0.5 font-semibold tabular-nums">
                     {confirmValues.quantity.toLocaleString()}
                   </p>
                 </div>
                 <div className="rounded-lg bg-muted/50 p-3">
-                  <p className="text-xs text-muted-foreground">Total charge</p>
+                  <p className="text-xs text-muted-foreground"><CustomerText value="Total charge" /></p>
                   <p className="mt-0.5 font-semibold text-primary tabular-nums">
                     {Number.isFinite(total) ? formatCurrency(total, currency) : "Unavailable"}
                   </p>
                 </div>
               </div>
               <div className="rounded-lg bg-muted/50 p-3">
-                <p className="text-xs text-muted-foreground">Target link</p>
+                <p className="text-xs text-muted-foreground"><CustomerText value="Target link" /></p>
                 <p className="mt-0.5 break-all font-mono text-xs">{confirmValues.link}</p>
               </div>
               {averageTime ? (
                 <div className="flex items-center justify-between rounded-lg bg-muted/50 p-3">
                   <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Clock className="h-3.5 w-3.5" /> Estimated delivery
+                    <Clock className="h-3.5 w-3.5" /> <CustomerText value="Estimated delivery" />
                   </span>
                   <span className="text-xs font-medium">{averageTime}</span>
                 </div>
@@ -512,7 +523,7 @@ export function OrderForm({
               onClick={() => setConfirmValues(null)}
               disabled={loading}
             >
-              Back
+              <CustomerText value="Back" />
             </Button>
             <Button
               variant="gradient"
@@ -520,7 +531,7 @@ export function OrderForm({
               onClick={() => confirmValues && placeOrder(confirmValues)}
             >
               {loading ? <Loader2 className="animate-spin" /> : <Zap />}
-              Confirm & Place Order
+              <CustomerText value="Confirm & Place Order" />
             </Button>
           </DialogFooter>
         </DialogContent>

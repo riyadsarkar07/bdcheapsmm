@@ -1,5 +1,6 @@
 "use client";
 
+import { CustomerText } from "@/components/customer-language";
 import * as React from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -33,6 +34,9 @@ import {
 } from "@/components/ui/select";
 import { PlatformLogo } from "@/components/platform-logo";
 import { PageHeader } from "@/components/page-header";
+import { toast } from "sonner";
+import { targetExample } from "@/lib/order-link";
+import { useCustomerText } from "@/components/customer-language";
 import { refillTerms } from "@/lib/refill-terms";
 import { OrderForm } from "@/components/services/order-form";
 import {
@@ -40,7 +44,6 @@ import {
   OTHER_PLATFORM,
   PLATFORM_LABELS,
   detectPlatform,
-  exampleLinkForPlatform,
 } from "@/lib/pricing";
 import type { Category, Json } from "@/lib/types/database";
 
@@ -64,6 +67,7 @@ type ServiceRow = {
   category_id: string | null;
   categories?: { name: string | null; slug: string | null; icon: string | null } | null;
   providers?: { id: string; name: string } | null;
+  favorites?: { user_id: string }[];
 };
 
 type SelectedService = ServiceRow;
@@ -83,6 +87,7 @@ function yesNo(value: unknown): string {
 }
 
 export function ServicesBrowser() {
+  const t = useCustomerText();
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
@@ -94,6 +99,10 @@ export function ServicesBrowser() {
   const [search, setSearch] = React.useState(searchParams.get("q") ?? "");
   const [debouncedSearch, setDebouncedSearch] = React.useState(search);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [kind, setKind] = React.useState("");
+  const [refillOnly, setRefillOnly] = React.useState(false);
+  const [savedOnly, setSavedOnly] = React.useState(false);
+  const [descending, setDescending] = React.useState(false);
   const [limit, setLimit] = React.useState(PAGE_SIZE);
   const detailRef = React.useRef<HTMLDivElement>(null);
   const servicesRef = React.useRef<HTMLDivElement>(null);
@@ -107,7 +116,7 @@ export function ServicesBrowser() {
   React.useEffect(() => {
     setLimit(PAGE_SIZE);
     setSelectedId(null);
-  }, [platform, category]);
+  }, [platform, category, kind, refillOnly, savedOnly, descending, debouncedSearch]);
 
   const { data: categories } = useQuery({
     queryKey: ["categories"],
@@ -159,22 +168,14 @@ export function ServicesBrowser() {
     refetchInterval: 15_000,
   });
 
-  const { data: favorites } = useQuery({
-    queryKey: ["favorites"],
-    queryFn: async () => {
-      const { data } = await supabase.from("favorites").select("service_id");
-      return new Set((data ?? []).map((f) => f.service_id));
-    },
-  });
-
-  const { data: services, isLoading } = useQuery({
-    queryKey: ["services", platform, category, debouncedSearch, limit],
-    enabled: platform === "all" || Boolean(category),
+  const { data: services, isLoading, isError } = useQuery({
+    queryKey: ["services", platform, category, debouncedSearch, limit, activeCategories.map(c => c.id), kind, refillOnly, savedOnly, descending, profile?.id],
+    enabled: (platform === "all" || Boolean(category) || activeCategories.length > 0) && (!savedOnly || !!profile?.id),
     queryFn: async () => {
       let q = supabase
         .from("services")
         .select(
-          "id, name, slug, description, price, min_quantity, max_quantity, average_time, type, is_active, is_featured, provider_service_id, meta, category_id, categories(name, slug, icon), providers(id, name)"
+          "id, name, slug, description, price, min_quantity, max_quantity, average_time, type, is_active, is_featured, provider_service_id, meta, category_id, categories(name, slug, icon), providers(id, name)" + (savedOnly ? ", favorites!inner(user_id)" : ", favorites(user_id)")
         )
         .eq("is_active", true);
 
@@ -184,10 +185,15 @@ export function ServicesBrowser() {
         q = q.eq("category_id", category);
       }
 
+      if (platform !== "all" && !category) q = q.in("category_id", activeCategories.map(c => c.id));
+      if (kind) q = q.eq("type", kind);
+      if (refillOnly) q = q.in("meta->>refill", ["true", "1", "yes", "Yes"]);
+      if (profile?.id) q = q.eq("favorites.user_id", profile.id);
       if (debouncedSearch) q = q.ilike("name", `%${debouncedSearch}%`);
-      q = q.order("price", { ascending: true }).limit(limit);
-      const { data } = await q;
-      return (data ?? []) as ServiceRow[];
+      q = q.order("price", { ascending: !descending }).order("id").limit(limit);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as unknown as ServiceRow[];
     },
     staleTime: 0,
     refetchOnMount: "always",
@@ -228,12 +234,11 @@ export function ServicesBrowser() {
   async function toggleFavorite(serviceId: string, isFavorite: boolean) {
     const uid = profile?.id;
     if (!uid) return;
-    if (isFavorite) {
-      await supabase.from("favorites").delete().eq("user_id", uid).eq("service_id", serviceId);
-    } else {
-      await supabase.from("favorites").insert({ user_id: uid, service_id: serviceId });
-    }
-    queryClient.invalidateQueries({ queryKey: ["favorites"] });
+    const result = isFavorite
+      ? await supabase.from("favorites").delete().eq("user_id", uid).eq("service_id", serviceId)
+      : await supabase.from("favorites").upsert({ user_id: uid, service_id: serviceId }, { onConflict: "user_id,service_id", ignoreDuplicates: true });
+    if (result.error) { toast.error(t("Could not update favorites.")); return; }
+    await queryClient.invalidateQueries({ queryKey: ["services"] });
   }
 
   function selectService(service: ServiceRow) {
@@ -255,18 +260,29 @@ export function ServicesBrowser() {
         description="Pick a platform and service, enter your link and quantity — we handle the rest."
       >
         <Badge variant="info" className="text-sm">
-          Balance: {profile ? formatBalance(profile.balance, profile.currency) : "..."}
+          <CustomerText value="Balance:" /> {profile ? formatBalance(profile.balance, profile.currency) : "..."}
         </Badge>
       </PageHeader>
 
+      <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
+        <select aria-label={t("Service type")} className="rounded-md border bg-background p-2" value={kind} onChange={e => setKind(e.target.value)}>
+          <option value="">{t("All service types")}</option>
+          {["followers","subscribers","views","likes","comment","shares","mentions","reviews","mix","other"].map(k => <option key={k} value={k}>{t(k)}</option>)}
+        </select>
+        <select className="rounded-md border bg-background p-2" aria-label={t("Sort by price")} value={descending ? "high" : "low"} onChange={e => setDescending(e.target.value === "high")}>
+          <option value="low">{t("Lowest price first")}</option><option value="high">{t("Highest price first")}</option>
+        </select>
+        <label><input type="checkbox" checked={refillOnly} onChange={e=>setRefillOnly(e.target.checked)} /> {t("Provider supports refill")}</label>
+        <label><input type="checkbox" checked={savedOnly} onChange={e=>setSavedOnly(e.target.checked)} /> {t("My favorites")}</label>
+      </div>
       {/* Platform menu: pick a platform to browse its services */}
       <div className="mb-6">
-        <p className="eyebrow mb-3">Browse by platform</p>
+        <p className="eyebrow mb-3"><CustomerText value="Browse by platform" /></p>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
           <PlatformTile
             active={platform === "all"}
             icon={<LayoutGrid className="h-5 w-5" />}
-            name="All services"
+            name={t("All services")}
             onClick={() => setFilter({ p: "", category: null })}
           />
           {visiblePlatforms.map((p) => (
@@ -364,7 +380,7 @@ export function ServicesBrowser() {
           <div className="relative w-full max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search services by name..."
+              placeholder={t("Search services by name...")}
               className="pl-9 pr-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -377,7 +393,7 @@ export function ServicesBrowser() {
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 aria-label="Clear search"
               >
-                Clear
+                <CustomerText value="Clear" />
               </button>
             ) : null}
           </div>
@@ -403,7 +419,8 @@ export function ServicesBrowser() {
               maxQuantity={selected.max_quantity}
               balance={profile?.balance ?? 0}
               currency={profile?.currency ?? "BDT"}
-              linkPlaceholder={exampleLinkForPlatform(selectedPlatform)}
+              platform={selectedPlatform}
+              linkPlaceholder={targetExample(selectedPlatform, selected.type)}
               averageTime={selected.average_time}
             />
           </div>
@@ -414,14 +431,14 @@ export function ServicesBrowser() {
       ) : null}
 
       {/* Service list */}
-      {platform !== "all" && !category ? (
+      {platform !== "all" && !category && activeCategories.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
           <p className="text-sm font-medium text-muted-foreground">
             Select a category above to browse{" "}
             {PLATFORM_LABELS[platform] ?? "this platform"} services.
           </p>
         </div>
-      ) : isLoading ? (
+      ) : isError ? <p role="alert">{t("Could not load services.")}</p> : isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 9 }).map((_, i) => (
             <Skeleton key={i} className="h-36 rounded-xl" />
@@ -435,7 +452,7 @@ export function ServicesBrowser() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {(services ?? []).map((service, index) => {
-            const isFavorite = favorites?.has(service.id) ?? false;
+            const isFavorite = !!profile?.id && !!service.favorites?.some(f => f.user_id === profile.id);
             const isSelected = selectedId === service.id;
             const servicePlatform = detectPlatform(service.categories?.name, service.categories?.slug);
             return (
@@ -464,6 +481,7 @@ export function ServicesBrowser() {
                     </div>
                   </div>
                   <button
+                    disabled={!profile?.id}
                     onClick={() => toggleFavorite(service.id, isFavorite)}
                     className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-rose-500"
                     aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
@@ -505,7 +523,7 @@ export function ServicesBrowser() {
                     variant={isSelected ? "gradient" : "outline"}
                     onClick={() => selectService(service)}
                   >
-                    {isSelected ? "Selected" : "Order"}
+                    {t(isSelected ? "Selected" : "Order")}
                     <ArrowRight className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -518,7 +536,7 @@ export function ServicesBrowser() {
       {hasMore ? (
         <div className="mt-6 flex justify-center">
           <Button variant="outline" onClick={() => setLimit((l) => l + PAGE_SIZE)}>
-            Load more services
+            <CustomerText value="Load more services" />
           </Button>
         </div>
       ) : null}
@@ -653,7 +671,7 @@ function ServiceDetails({
             label="Example Link"
             value={
               <span className="block max-w-[240px] truncate text-xs text-muted-foreground">
-                {exampleLinkForPlatform(platform)}
+                {targetExample(platform, service.type)}
               </span>
             }
           />

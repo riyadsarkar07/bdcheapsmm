@@ -4,6 +4,7 @@ import type {
   TicketStatus,
   TransactionType,
 } from "@/lib/types/database";
+import { ProviderStatusText, CustomerText } from "@/components/customer-language";
 import { Badge } from "@/components/ui/badge";
 
 const orderStatusMap: Record<OrderStatus, { label: string; variant: "success" | "warning" | "destructive" | "info" | "subtle" | "secondary" }> = {
@@ -20,7 +21,7 @@ const orderStatusMap: Record<OrderStatus, { label: string; variant: "success" | 
 
 export function OrderStatusBadge({ status, providerStatus }: { status: OrderStatus; providerStatus?: string | null }) {
   const config = orderStatusMap[status] ?? { label: status, variant: "subtle" as const };
-  return <Badge variant={config.variant}>{providerStatus || config.label}</Badge>;
+  return <Badge variant={config.variant}>{providerStatus ? <ProviderStatusText value={providerStatus} /> : <CustomerText value={config.label} />}</Badge>;
 }
 
 const paymentStatusMap: Record<PaymentStatus, { label: string; variant: "success" | "warning" | "destructive" }> = {
@@ -56,5 +57,5 @@ const transactionTypeMap: Record<TransactionType, { label: string; variant: "suc
 
 export function TransactionTypeBadge({ type }: { type: TransactionType }) {
   const config = transactionTypeMap[type] ?? { label: type, variant: "secondary" as const };
-  return <Badge variant={config.variant}>{config.label}</Badge>;
+  return <Badge variant={config.variant}><CustomerText value={config.label} /></Badge>;
 }

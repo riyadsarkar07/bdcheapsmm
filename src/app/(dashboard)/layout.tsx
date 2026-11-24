@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+import { CustomerLanguage } from "@/components/customer-language";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getPublicSettings } from "@/lib/settings";
@@ -44,6 +46,7 @@ export default async function DashboardLayout({
   const unreadNotices = Math.max(0, publishedIds.length - readCount);
 
   return (
+    <CustomerLanguage initial={(await cookies()).get("customer_language")?.value === "bn" ? "bn" : "en"}>
     <AppShell
       profile={profile as Profile}
       siteName={settings.site.name}
@@ -51,5 +54,6 @@ export default async function DashboardLayout({
     >
       {children}
     </AppShell>
+    </CustomerLanguage>
   );
 }
