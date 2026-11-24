@@ -49,6 +49,7 @@ type OrderRow = {
   services?: { name: string } | null;
   provider_id: string | null;
   providerName: string;
+  refillDisabled: boolean;
   requested: boolean;
   provider_order_id: string | null;
   quantity: number;
@@ -195,6 +196,67 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
   const canRefill = (status: OrderStatus) => status === "completed" || status === "partial";
   const canRetry = (status: OrderStatus) => status === "failed" || status === "rejected";
 
+  function orderActions(order: OrderRow) {
+    return <>
+      {order.provider_order_id ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-primary hover:text-primary"
+          onClick={() =>
+            runOrderAction(order, "Check Status", () => refreshOrderStatusAction(order.id))
+          }
+          disabled={actionLoading === order.id + "Check Status"}
+          title="Check status with provider (SMMFollow)"
+        >
+          {actionLoading === order.id + "Check Status" ? <Loader2 className="animate-spin" /> : <RefreshCw />} Check status
+        </Button>
+      ) : null}
+      {canRefill(order.status) ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-warning hover:text-warning"
+          onClick={() =>
+            runOrderAction(order, "Refill", () => refillOrderAction(order.id))
+          }
+          disabled={order.refillDisabled || !order.provider_order_id || actionLoading === order.id + "Refill"}
+          title="Request refill"
+        >
+          {actionLoading === order.id + "Refill" ? <Loader2 className="animate-spin" /> : <RotateCcw />} {order.refillDisabled ? "Refill unavailable" : "Request refill"}
+        </Button>
+      ) : null}
+      {canRetry(order.status) ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-primary hover:text-primary"
+          onClick={() => {
+            setRetryLink("");
+            setRetryTarget(order);
+          }}
+          disabled={actionLoading === order.id + "Retry"}
+          title="Retry order with a new link"
+        >
+          <Zap /> Retry order
+        </Button>
+      ) : null}
+      {providerButton(order)}
+      {order.status !== "refunded" ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-success hover:text-success"
+          onClick={() => refund(order)}
+          disabled={actionLoading === order.id + "refund"}
+          title="Refund customer wallet" aria-label="Refund customer wallet"
+        >
+          {actionLoading === order.id + "refund" ? <Loader2 className="animate-spin" /> : <Undo2 />} Refund customer wallet
+        </Button>
+      ) : null}
+    </>;
+  }
+
   return (
     <div>
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -297,7 +359,7 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{formatDateTime(order.created_at, "MMM d, h:mm a")}</td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex min-w-56 flex-wrap items-center justify-end gap-1">
                           <Select value={order.status} onValueChange={(v) => setStatus(order, v as OrderStatus)}>
                             <SelectTrigger className="h-8 w-32 text-xs">
                               <SelectValue />
@@ -308,62 +370,7 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                               ))}
                             </SelectContent>
                           </Select>
-                          {order.provider_order_id ? (
-                            <Button
-                              variant="ghost"
-                              size="iconSm"
-                              className="text-primary hover:text-primary"
-                              onClick={() =>
-                                runOrderAction(order, "Check Status", () => refreshOrderStatusAction(order.id))
-                              }
-                              disabled={actionLoading === order.id + "Check Status"}
-                              title="Check status with provider (SMMFollow)"
-                            >
-                              {actionLoading === order.id + "Check Status" ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-                            </Button>
-                          ) : null}
-                          {canRefill(order.status) ? (
-                            <Button
-                              variant="ghost"
-                              size="iconSm"
-                              className="text-warning hover:text-warning"
-                              onClick={() =>
-                                runOrderAction(order, "Refill", () => refillOrderAction(order.id))
-                              }
-                              disabled={actionLoading === order.id + "Refill"}
-                              title="Request refill"
-                            >
-                              {actionLoading === order.id + "Refill" ? <Loader2 className="animate-spin" /> : <RotateCcw />}
-                            </Button>
-                          ) : null}
-                          {canRetry(order.status) ? (
-                            <Button
-                              variant="ghost"
-                              size="iconSm"
-                              className="text-primary hover:text-primary"
-                              onClick={() => {
-                                setRetryLink("");
-                                setRetryTarget(order);
-                              }}
-                              disabled={actionLoading === order.id + "Retry"}
-                              title="Retry order with a new link"
-                            >
-                              <Zap />
-                            </Button>
-                          ) : null}
-                          {providerButton(order)}
-                          {order.status !== "refunded" ? (
-                            <Button
-                              variant="ghost"
-                              size="iconSm"
-                              className="text-success hover:text-success"
-                              onClick={() => refund(order)}
-                              disabled={actionLoading === order.id + "refund"}
-                              title="Refund customer wallet" aria-label="Refund customer wallet"
-                            >
-                              {actionLoading === order.id + "refund" ? <Loader2 className="animate-spin" /> : <Undo2 />}
-                            </Button>
-                          ) : null}
+                          {orderActions(order)}
                         </div>
                       </td>
                     </tr>
@@ -402,12 +409,7 @@ export function AdminOrders({ orders }: { orders: OrderRow[] }) {
                         ))}
                       </SelectContent>
                     </Select>
-                    {providerButton(order)}
-                    {order.status !== "refunded" ? (
-                      <Button variant="outline" size="sm" className="text-success" onClick={() => refund(order)} disabled={actionLoading === order.id + "refund"}>
-                        {actionLoading === order.id + "refund" ? <Loader2 className="animate-spin" /> : <Undo2 />} Refund customer wallet
-                      </Button>
-                    ) : null}
+                    {orderActions(order)}
                   </div>
                 </li>
               ))}

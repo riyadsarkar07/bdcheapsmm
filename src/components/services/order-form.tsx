@@ -61,6 +61,7 @@ const formSchema = z.object({
 interface OrderFormProps {
   serviceId: string;
   serviceName: string;
+  refillLabel: string;
   /** Retail price per 1000 units (same as the provider rate + markup). */
   pricePerUnit: number;
   minQuantity: number;
@@ -76,6 +77,7 @@ interface OrderFormProps {
 export function OrderForm({
   serviceId,
   serviceName,
+  refillLabel,
   pricePerUnit,
   minQuantity,
   maxQuantity,
@@ -95,9 +97,11 @@ export function OrderForm({
   const [pendingValues, setPendingValues] = React.useState<z.infer<typeof formSchema> | null>(null);
   const [confirmValues, setConfirmValues] = React.useState<z.infer<typeof formSchema> | null>(null);
 
+  const firstBillableQuantity = Math.max(minQuantity, Math.ceil(5 / pricePerUnit));
+  const suggested = firstBillableQuantity <= maxQuantity ? firstBillableQuantity : minQuantity;
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { quantity: Math.max(minQuantity, Math.min(maxQuantity, previous?.quantity ?? minQuantity)), link: previous?.link ?? "", coupon: "" },
+    defaultValues: { quantity: Math.max(minQuantity, Math.min(maxQuantity, previous?.quantity ?? suggested)), link: previous?.link ?? "", coupon: "" },
   });
 
   const quantity = form.watch("quantity") || 0;
@@ -121,12 +125,12 @@ export function OrderForm({
   const balanceAfter = Math.max(0, Number(balance) - total);
 
   const presets = React.useMemo(() => {
-    const candidates = [minQuantity, 1000, 5000, 10000, 50000];
+    const candidates = [suggested, 1000, 5000, 10000, 50000];
     const unique = Array.from(new Set(candidates)).filter(
       (n) => n >= minQuantity && n <= maxQuantity
     );
     return unique.slice(0, 4);
-  }, [minQuantity, maxQuantity]);
+  }, [minQuantity, maxQuantity, suggested]);
 
   async function placeOrder(values: z.infer<typeof formSchema>) {
     if (needsQuote || !hasSufficientBalance(balance, total)) return;
@@ -181,8 +185,6 @@ export function OrderForm({
 
   const chargeable = Number.isFinite(total) && total > 0;
   const insufficient = chargeable && !hasSufficientBalance(balance, total);
-  // A raw USD total of half a cent rounds to the first billable cent in checkout.
-  const firstBillableQuantity = Math.max(minQuantity, Math.ceil(5 / pricePerUnit));
   const canIncrease = !applied && pricePerUnit > 0 && quantity < firstBillableQuantity && firstBillableQuantity <= maxQuantity;
 
   function adjustQuantity(delta: number) {
@@ -209,6 +211,7 @@ export function OrderForm({
         </Badge>
       </div>
 
+      <p className="mb-3 text-sm"><strong>Refill:</strong> {refillLabel}</p>
       {previous && previous.quantity !== form.formState.defaultValues?.quantity && (
         <p className="mb-3 text-sm text-muted-foreground">The service limits changed. Check the adjusted quantity before placing this order.</p>
       )}

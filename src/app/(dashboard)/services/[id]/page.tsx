@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/guards";
+import { refillTerms } from "@/lib/refill-terms";
 import { OrderForm } from "@/components/services/order-form";
 import { CategoryIcon } from "@/components/category-icon";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +29,7 @@ export default async function ServiceOrderPage({
   const { data: service } = await supabase
     .from("services")
     .select(
-      "id, name, slug, description, price, min_quantity, max_quantity, average_time, type, is_active, is_featured, category_id, categories(name, slug, icon), providers(id, name)"
+      "id, name, slug, description, meta, price, min_quantity, max_quantity, average_time, type, is_active, is_featured, category_id, categories(name, slug, icon), providers(id, name)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -128,6 +129,7 @@ export default async function ServiceOrderPage({
             serviceId={service.id}
             previous={previous}
             serviceName={service.name}
+              refillLabel={refillTerms(service.meta, service.name, service.description ?? "").label}
             pricePerUnit={Number(service.price)}
             minQuantity={service.min_quantity}
             maxQuantity={service.max_quantity}

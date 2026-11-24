@@ -63,12 +63,16 @@ function ProfitValue({ value }: { value: number | null }) {
 
 export function OrderDetailClient({
   order,
+  refillLabel,
+  refillDisabled,
   providerName,
   isAdmin = false,
   isOwner,
   profit,
 }: {
   order: OrderWithRelations;
+  refillLabel: string;
+  refillDisabled: boolean;
   providerName: string | null;
   isAdmin?: boolean;
   isOwner: boolean;
@@ -79,6 +83,7 @@ export function OrderDetailClient({
   const orderState = order;
   const snapshot = order.provider_response;
   const providerStatus = snapshot && typeof snapshot === "object" && !Array.isArray(snapshot) && typeof snapshot.status === "string" ? snapshot.status : null;
+  const checkedAt = snapshot && typeof snapshot === "object" && !Array.isArray(snapshot) && typeof snapshot.panel_checked_at === "string" ? snapshot.panel_checked_at : null;
   React.useEffect(() => {
     const db = createClient();
     const channel = db.channel(`order-detail-${order.id}`)
@@ -293,11 +298,12 @@ export function OrderDetailClient({
               variant="warning"
               className="w-full justify-start"
               onClick={() => runAction("refill", () => refillOrderAction(orderState.id))}
-              disabled={action !== null || !canRefill}
+              disabled={action !== null || !canRefill || refillDisabled || !order.provider_order_id || (order.refill_count ?? 0) >= 2}
             >
               {action === "refill" ? <Loader2 className="animate-spin" /> : <RotateCcw />}
-              Request Refill
+              {refillDisabled ? "Refill unavailable" : "Request refill"}
             </Button>
+            <p className="text-xs text-muted-foreground">Refill: {refillLabel}</p>
             <Button
               variant="destructive"
               className="w-full justify-start"
@@ -321,7 +327,7 @@ export function OrderDetailClient({
 
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Clock className="h-3.5 w-3.5" />
-              Status updates every few minutes automatically.
+              Last provider check: {checkedAt ? formatDateTime(checkedAt) : "No check time recorded"}
             </div>
             <div className="flex flex-wrap gap-2">
               <Badge variant="subtle">Panel status: {orderState.status.replace("_", " ")}</Badge>

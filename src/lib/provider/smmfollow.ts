@@ -44,6 +44,7 @@ export interface ProviderBalanceResult {
 }
 
 export class ProviderCancelRejected extends Error {}
+export class ProviderRefillRejected extends Error {}
 
 export class ProviderError extends Error {
   status?: number;
@@ -123,6 +124,10 @@ export function normalizeProviderServiceItem(raw: unknown): ProviderServiceItem 
   const rate = parseProviderRate(firstValue(record, ["rate", "price", "cost", "provider_price", "Rate"]));
   if (!serviceId || rate == null) return null;
   const numericId = Number(serviceId);
+  const sourceDescription = firstValue(record, ["description", "desc"]);
+  const refillDays = Number(firstValue(record, ["refill_days", "refill_period_days"]));
+  const description = [sourceDescription];
+  if (Number.isInteger(refillDays) && refillDays > 0) description.push(`Refill: ${refillDays} days`);
   return {
     service: Number.isFinite(numericId) ? numericId : 0,
     service_id: serviceId,
@@ -133,9 +138,7 @@ export function normalizeProviderServiceItem(raw: unknown): ProviderServiceItem 
     max: Number(firstValue(record, ["max", "max_quantity", "maximum"]) ?? 100),
     type: String(firstValue(record, ["type", "service_type"]) ?? ""),
     average_time: String(firstValue(record, ["average_time", "average", "time"]) ?? ""),
-    description: firstValue(record, ["description", "desc"]) != null
-      ? String(firstValue(record, ["description", "desc"]))
-      : undefined,
+    description: description.filter(Boolean).join("\n") || undefined,
     refill: firstValue(record, ["refill"]) as boolean | string | undefined,
     cancel: firstValue(record, ["cancel"]) as boolean | string | undefined,
     driptype: firstValue(record, ["driptype", "drip_type"]) != null
@@ -291,12 +294,15 @@ export const providerApi = {
   async refill(
     provider: Pick<Provider, "api_url" | "api_key" | "name">,
     providerOrderId: string | number
-  ): Promise<{ refill: boolean; message?: string }> {
+  ): Promise<{ reference: string | null }> {
     const data = asRecord(await post(provider, "refill", { order: providerOrderId }));
-    if (data.refill === undefined) {
-      assertProviderFailed(data, "Refill failed");
+    const value = data.refill;
+    if (data.error || value === false || value === 0 || value === "0" || value === "false") {
+      throw new ProviderRefillRejected(providerErrorMessage(data) ?? "Provider declined the refill request.");
     }
-    return data as unknown as { refill: boolean; message?: string };
+    if (value === true || value === "true") return { reference: null };
+    if ((typeof value === "string" || typeof value === "number") && /^\d+$/.test(String(value))) return { reference: String(value) };
+    throw new ProviderError("Provider refill acknowledgement could not be verified.");
   },
 
   async cancel(

@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { PlatformLogo } from "@/components/platform-logo";
 import { PageHeader } from "@/components/page-header";
+import { refillTerms } from "@/lib/refill-terms";
 import { OrderForm } from "@/components/services/order-form";
 import {
   PLATFORMS,
@@ -396,6 +397,7 @@ export function ServicesBrowser() {
               key={selected.id}
               serviceId={selected.id}
               serviceName={selected.name}
+              refillLabel={refillTerms(selected.meta, selected.name, selected.description ?? "").label}
               pricePerUnit={Number(selected.price)}
               minQuantity={selected.min_quantity}
               maxQuantity={selected.max_quantity}
@@ -593,7 +595,7 @@ function ServiceDetails({
   platform: string;
 }) {
   const meta = parseMeta(service.meta);
-  const refill = yesNo(meta.refill);
+  const refill = refillTerms(service.meta, service.name, service.description ?? "").label;
   const cancel = yesNo(meta.cancel);
   const drop = yesNo(meta.drop);
   const driptype =

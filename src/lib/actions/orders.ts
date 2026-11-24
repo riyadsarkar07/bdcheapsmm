@@ -6,9 +6,10 @@ import { fail, ok, requireUser, isAdminProfile, type ActionResult } from "@/lib/
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { generateOrderNumber, formatCurrency } from "@/lib/utils";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { providerApi, ProviderCancelRejected } from "@/lib/provider/smmfollow";
+import { providerApi, ProviderCancelRejected, ProviderRefillRejected } from "@/lib/provider/smmfollow";
 import { parseChargeError } from "@/lib/pricing";
 import { assertOrderPricingSafety } from "@/lib/pricing-safety";
+import { refillTerms } from "@/lib/refill-terms";
 import { writeLog } from "@/lib/audit";
 import { createNotification } from "@/lib/notify";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -339,9 +340,12 @@ export async function cancelOrderAction(orderId: string): Promise<ActionResult> 
     .or("cancel_count.is.null,cancel_count.eq.0").select("id").maybeSingle();
   if (claim.error) return fail("Could not record the request. Try again shortly.");
   if (!claim.data) return fail("A request is already recorded or the order status changed. Refresh the order.");
+  await writeLog({ userId: user.id, action: "order_cancel", entityType: "orders", entityId: orderId, description: "Provider cancellation requested." });
   try {
     await providerApi.cancel(provider, order.provider_order_id);
   } catch (err) {
+    await writeLog({ userId: user.id, action: "order_cancel", entityType: "orders", entityId: orderId,
+      description: err instanceof ProviderCancelRejected ? "Provider declined the cancellation request." : "Cancellation request sent; provider receipt unconfirmed." });
     if (err instanceof ProviderCancelRejected) {
       const released = await admin.from("orders").update({ cancel_count: 0 })
         .eq("id", orderId).eq("provider_order_id", order.provider_order_id).eq("cancel_count", 1);
@@ -388,6 +392,7 @@ export async function refreshOrderStatusAction(
     const { normalizeProviderStatus, isKnownOrderStatus, mergeProviderCounts } = await import(
       "@/lib/provider/smmfollow"
     );
+    const response = { ...result, panel_checked_at: new Date().toISOString() };
     const mapped = normalizeProviderStatus(result.status);
     const status = order.status !== "refunded" && isKnownOrderStatus(mapped) ? mapped as OrderStatus : order.status;
     const counts = mergeProviderCounts(result, {
@@ -398,11 +403,11 @@ export async function refreshOrderStatusAction(
       status,
       start_count: counts.start_count,
       remain: counts.remain,
-      provider_response: result as never,
+      provider_response: response as never,
     };
     const admin = createAdminClient();
     if (mapped === "cancelled" || mapped === "refunded") {
-      const snapshot = await admin.from("orders").update({ provider_response: result as never, ...counts }).eq("id", orderId).eq("provider_order_id", order.provider_order_id).eq("status", order.status).select("id").maybeSingle();
+      const snapshot = await admin.from("orders").update({ provider_response: response as never, ...counts }).eq("id", orderId).eq("provider_order_id", order.provider_order_id).eq("status", order.status).select("id").maybeSingle();
       if (snapshot.error || !snapshot.data) return fail("Unable to save provider confirmation. Please refresh again.");
       const refund = await admin.rpc("refund_order", { p_order_id: orderId, p_refunded_by: user.id });
       if (refund.error) return fail(refund.error.message);
@@ -426,13 +431,15 @@ export async function refillOrderAction(orderId: string): Promise<ActionResult> 
 
   const { data: order } = await supabase
     .from("orders")
-    .select("id, user_id, provider_id, provider_order_id, order_number, refill_count")
+    .select("id, user_id, provider_id, provider_order_id, order_number, refill_count, status, services(meta, name, description)")
     .eq("id", orderId)
     .single();
 
   if (!order) return fail("Order not found.");
   if (order.user_id !== user.id && !isAdminProfile(user)) return fail("Forbidden.");
   if (!order.provider_order_id) return fail("No provider order reference.");
+  if (!["completed", "partial"].includes(order.status)) return fail("Refill requires a completed or partial order.");
+  if (refillTerms(order.services?.meta, order.services?.name, order.services?.description ?? "").disabled) return fail("Refill is not available for this service.");
   if ((order.refill_count ?? 0) >= 2) return fail("Refill limit reached for this order.");
   if (!order.provider_id) return fail("Provider not found.");
 
@@ -443,9 +450,13 @@ export async function refillOrderAction(orderId: string): Promise<ActionResult> 
     .single();
   if (!provider) return fail("Provider not found.");
 
+  await writeLog({ userId: user.id, action: "order_refill", entityType: "orders", entityId: orderId, description: "Provider refill requested." });
+  let receipt;
   try {
-    await providerApi.refill(provider, order.provider_order_id);
+    receipt = await providerApi.refill(provider, order.provider_order_id);
   } catch (err) {
+    await writeLog({ userId: user.id, action: "order_refill", entityType: "orders", entityId: order.id,
+      description: err instanceof ProviderRefillRejected ? "Provider declined the refill request." : "Refill request did not receive provider confirmation." });
     return fail((err as Error).message);
   }
 
@@ -455,7 +466,7 @@ export async function refillOrderAction(orderId: string): Promise<ActionResult> 
     action: "order_refill",
     entityType: "orders",
     entityId: order.id,
-    description: `Refilled order #${order.order_number}`,
+    description: receipt.reference ? `Provider accepted refill request #${receipt.reference}.` : "Provider accepted the refill request.",
   });
   return ok(undefined, "Refill requested successfully.");
 }
