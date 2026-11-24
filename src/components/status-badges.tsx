@@ -18,9 +18,9 @@ const orderStatusMap: Record<OrderStatus, { label: string; variant: "success" | 
   rejected: { label: "Rejected", variant: "destructive" },
 };
 
-export function OrderStatusBadge({ status }: { status: OrderStatus }) {
+export function OrderStatusBadge({ status, providerStatus }: { status: OrderStatus; providerStatus?: string | null }) {
   const config = orderStatusMap[status] ?? { label: status, variant: "subtle" as const };
-  return <Badge variant={config.variant}>{config.label}</Badge>;
+  return <Badge variant={config.variant}>{providerStatus || config.label}</Badge>;
 }
 
 const paymentStatusMap: Record<PaymentStatus, { label: string; variant: "success" | "warning" | "destructive" }> = {

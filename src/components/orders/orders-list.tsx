@@ -23,6 +23,7 @@ type OrderRow = {
   id: string;
   order_number: string;
   provider_order_id: string | null;
+  provider_status: string | null;
   service_id: string | null;
   services?: { name: string } | null;
   quantity: number;
@@ -62,7 +63,7 @@ export function OrdersList({
     async function refresh() {
       const version = ++revision;
       let query = supabase.from("orders")
-        .select("id, order_number, provider_order_id, service_id, services(name), matching:services(), quantity, price, status, created_at, currency", { count: "exact" })
+        .select("id, order_number, provider_order_id, provider_status:provider_response->>status, service_id, services(name), matching:services(), quantity, price, status, created_at, currency", { count: "exact" })
         .eq("user_id", userId);
       if (status !== "all") query = query.eq("status", status as OrderStatus);
       const term = search.trim().replace(/^#/, "");
@@ -170,7 +171,7 @@ export function OrdersList({
                       <td className="px-4 py-3 text-right tabular-nums">{order.quantity.toLocaleString()}</td>
                       <td className="px-4 py-3 text-right font-medium tabular-nums">{formatCurrency(order.price, order.currency)}</td>
                       <td className="px-4 py-3">
-                        <OrderStatusBadge status={order.status} />
+                        <OrderStatusBadge providerStatus={order.provider_status || (order.provider_order_id ? "Awaiting provider status" : null)} status={order.status} />
                       </td>
                       <td className="px-4 py-3 text-right text-muted-foreground">
                         {formatDateTime(order.created_at, "MMM d, h:mm a")}
@@ -191,7 +192,7 @@ export function OrdersList({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-semibold text-primary">#{order.order_number}</span>
-                      <OrderStatusBadge status={order.status} />
+                      <OrderStatusBadge providerStatus={order.provider_status || (order.provider_order_id ? "Awaiting provider status" : null)} status={order.status} />
                     </div>
                     {order.provider_order_id && (
                       <p className="break-all text-xs text-muted-foreground">Provider Order ID: {order.provider_order_id}</p>

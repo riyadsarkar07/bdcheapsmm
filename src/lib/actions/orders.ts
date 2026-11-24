@@ -388,10 +388,8 @@ export async function refreshOrderStatusAction(
     const { normalizeProviderStatus, isKnownOrderStatus, mergeProviderCounts } = await import(
       "@/lib/provider/smmfollow"
     );
-    const status = normalizeProviderStatus(result.status) as OrderStatus;
-    if (!isKnownOrderStatus(status)) {
-      return fail(`Provider returned an unrecognized status for this order: "${result.status}".`);
-    }
+    const mapped = normalizeProviderStatus(result.status);
+    const status = order.status !== "refunded" && isKnownOrderStatus(mapped) ? mapped as OrderStatus : order.status;
     const counts = mergeProviderCounts(result, {
       start_count: order.start_count ?? null,
       remain: order.remain ?? null,
@@ -403,15 +401,15 @@ export async function refreshOrderStatusAction(
       provider_response: result as never,
     };
     const admin = createAdminClient();
-    if (status === "cancelled" || status === "refunded") {
-      const snapshot = await admin.from("orders").update({ provider_response: result as never, ...counts }).eq("id", orderId);
-      if (snapshot.error) return fail("Unable to save provider confirmation. Please refresh again.");
+    if (mapped === "cancelled" || mapped === "refunded") {
+      const snapshot = await admin.from("orders").update({ provider_response: result as never, ...counts }).eq("id", orderId).eq("provider_order_id", order.provider_order_id).eq("status", order.status).select("id").maybeSingle();
+      if (snapshot.error || !snapshot.data) return fail("Unable to save provider confirmation. Please refresh again.");
       const refund = await admin.rpc("refund_order", { p_order_id: orderId, p_refunded_by: user.id });
       if (refund.error) return fail(refund.error.message);
       return ok({ status: "refunded", ...counts });
     }
-    const write = await admin.from("orders").update(updates).eq("id", orderId)
-      .eq("status", order.status).neq("status", "refunded").select("id").maybeSingle();
+    const write = await admin.from("orders").update(updates).eq("id", orderId).eq("provider_order_id", order.provider_order_id)
+      .eq("status", order.status).select("id").maybeSingle();
     if (write.error || !write.data) return fail("Order changed. Refresh to see its latest status.");
     return ok({ status, start_count: counts.start_count, remain: counts.remain });
   } catch (err) {

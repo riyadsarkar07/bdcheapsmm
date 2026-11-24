@@ -30,7 +30,7 @@ export async function GET(request: Request) {
 
   const { data: orders, error } = await supabase
     .from("orders")
-    .select("id, provider_id, provider_order_id, status, start_count, remain")
+    .select("id, provider_id, provider_order_id, previous_status:provider_response->>status, status, start_count, remain")
     .in("status", ["pending", "processing", "in_progress"])
     .not("provider_order_id", "is", null);
 
@@ -59,13 +59,8 @@ export async function GET(request: Request) {
 
     try {
       const result = await providerApi.getStatus(provider, order.provider_order_id);
-      const status = normalizeProviderStatus(result.status) as OrderStatus;
-
-      if (!isKnownOrderStatus(status)) {
-        // Unmapped provider status - skip to avoid writing an invalid enum value.
-        continue;
-      }
-
+      const mapped = normalizeProviderStatus(result.status);
+      const status = isKnownOrderStatus(mapped) ? mapped as OrderStatus : order.status;
       // Persist provider counts on every poll. A valid numeric value wins; an
       // empty/missing value keeps the previously saved one so a start count is
       // never wiped while the order is still in flight.
@@ -82,18 +77,19 @@ export async function GET(request: Request) {
       if (status === "refunded" || status === "cancelled") {
         const snapshot = await supabase.from("orders").update({
           provider_response: result as never, ...counts,
-        }).eq("id", order.id);
+        }).eq("id", order.id).eq("provider_order_id", order.provider_order_id).eq("status", order.status).select("id").maybeSingle();
         if (snapshot.error) throw snapshot.error;
+        if (!snapshot.data) continue;
         const refund = await supabase.rpc("refund_order", { p_order_id: order.id, p_refunded_by: null });
         if (refund.error) throw refund.error;
         updated++;
-      } else if (isTerminal || statusChanged || countsChanged) {
+      } else if (isTerminal || statusChanged || countsChanged || result.status !== order.previous_status) {
         const write = await supabase.from("orders").update({
           status,
           start_count: counts.start_count,
           remain: counts.remain,
-          ...(isTerminal ? { provider_response: result as never } : {}),
-        }).eq("id", order.id).eq("status", order.status).select("id").maybeSingle();
+          provider_response: result as never,
+        }).eq("id", order.id).eq("provider_order_id", order.provider_order_id).eq("status", order.status).select("id").maybeSingle();
         if (write.error) throw write.error;
         if (write.data) updated++;
       }

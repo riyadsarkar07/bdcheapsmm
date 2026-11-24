@@ -44,7 +44,8 @@ import {
   retryOrderAction,
 } from "@/lib/actions/orders";
 import { formatCurrency, formatUsd, formatDateTime } from "@/lib/utils";
-import type { Order, OrderStatus } from "@/lib/types/database";
+import { createClient } from "@/lib/supabase/client";
+import type { Order } from "@/lib/types/database";
 import type { OrderProfit } from "@/lib/order-profit";
 
 interface OrderWithRelations extends Order {
@@ -58,16 +59,6 @@ function ProfitValue({ value }: { value: number | null }) {
       {formatUsd(value, 4)}
     </span>
   );
-}
-
-function deliveryProgress(order: OrderWithRelations): number {
-  if (order.status === "completed") return 100;
-  if (order.remain == null || order.quantity <= 0) {
-    if (["pending", "processing"].includes(order.status)) return 4;
-    return 0;
-  }
-  const delivered = Math.max(0, order.quantity - order.remain);
-  return Math.min(100, Math.round((delivered / order.quantity) * 100));
 }
 
 export function OrderDetailClient({
@@ -85,7 +76,16 @@ export function OrderDetailClient({
 }) {
   const router = useRouter();
   const reduced = useReducedMotion();
-  const [orderState, setOrderState] = React.useState(order);
+  const orderState = order;
+  const snapshot = order.provider_response;
+  const providerStatus = snapshot && typeof snapshot === "object" && !Array.isArray(snapshot) && typeof snapshot.status === "string" ? snapshot.status : null;
+  React.useEffect(() => {
+    const db = createClient();
+    const channel = db.channel(`order-detail-${order.id}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "orders", filter: `id=eq.${order.id}` }, () => router.refresh())
+      .subscribe();
+    return () => { void db.removeChannel(channel); };
+  }, [order.id, router]);
   const [action, setAction] = React.useState<string | null>(null);
   const [retryOpen, setRetryOpen] = React.useState(false);
   const [retryLink, setRetryLink] = React.useState(order.link);
@@ -126,15 +126,6 @@ export function OrderDetailClient({
                 ? "Refill requested"
                 : "Order retried"
         );
-        if (name === "refresh" && result.data) {
-          const data = result.data as { status: OrderStatus; start_count: number | null; remain: number | null };
-          setOrderState((prev) => ({
-            ...prev,
-            status: data.status,
-            start_count: data.start_count,
-            remain: data.remain,
-          }));
-        }
         router.refresh();
       } else {
         toast.error(result.error ?? "Action failed");
@@ -147,13 +138,8 @@ export function OrderDetailClient({
   const canCancel = ["pending", "processing", "in_progress"].includes(orderState.status);
   const canRefill = orderState.status === "completed" || orderState.status === "partial";
   const canRetry = orderState.status === "failed" || orderState.status === "rejected";
-  const progress = deliveryProgress(orderState);
-  const delivered =
-    orderState.remain != null
-      ? Math.max(0, orderState.quantity - orderState.remain)
-      : orderState.status === "completed"
-        ? orderState.quantity
-        : 0;
+  const delivered = order.remain == null || order.quantity <= 0 ? null : Math.min(order.quantity, Math.max(0, order.quantity - order.remain));
+  const progress = delivered == null ? null : Math.round(100 * delivered / order.quantity);
 
   const details = [
     { label: "Order Number", value: `#${orderState.order_number}`, copy: orderState.order_number },
@@ -161,6 +147,7 @@ export function OrderDetailClient({
     { label: "Quantity", value: orderState.quantity.toLocaleString() },
     { label: "Price", value: formatCurrency(orderState.price, orderState.currency) },
     { label: "Provider Order ID", value: orderState.provider_order_id ?? "—", copy: orderState.provider_order_id ?? undefined },
+    { label: "Provider status", value: providerStatus || "Not reported yet" },
     { label: "Provider", value: providerName ?? "—" },
     { label: "Start Count", value: orderState.start_count?.toLocaleString() ?? "—" },
     { label: "Remaining", value: orderState.remain?.toLocaleString() ?? "—" },
@@ -182,7 +169,7 @@ export function OrderDetailClient({
           <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{orderState.services?.name}</p>
         </div>
         <div className="flex items-center gap-2">
-          <OrderStatusBadge status={orderState.status} />
+          <OrderStatusBadge providerStatus={providerStatus || (order.provider_order_id ? "Awaiting provider status" : null)} status={orderState.status} />
           <Badge variant="secondary">{formatCurrency(orderState.price, orderState.currency)}</Badge>
         </div>
       </div>
@@ -205,9 +192,9 @@ export function OrderDetailClient({
             <CardContent>
               <div className="mb-2 flex items-end justify-between">
                 <div>
-                  <p className="text-2xl font-bold tabular-nums">{progress}%</p>
+                  <p className="text-2xl font-bold tabular-nums">{progress == null ? "Awaiting delivery count" : `${progress}%`}</p>
                   <p className="text-xs text-muted-foreground">
-                    {delivered.toLocaleString()} of {orderState.quantity.toLocaleString()} delivered
+                    {delivered != null && `${delivered.toLocaleString()} of ${orderState.quantity.toLocaleString()} delivered`}
                   </p>
                 </div>
                 <div className="text-right text-xs text-muted-foreground">
@@ -223,7 +210,7 @@ export function OrderDetailClient({
                   )}
                 </div>
               </div>
-              <Progress value={progress} className="h-2.5" />
+              {progress != null && <Progress value={progress} className="h-2.5" />}
               {orderState.status === "completed" ? (
                 <p className="mt-2 flex items-center gap-1.5 text-xs text-success">
                   <CheckCircle2 className="h-3.5 w-3.5" /> Delivery complete
@@ -337,7 +324,7 @@ export function OrderDetailClient({
               Status updates every few minutes automatically.
             </div>
             <div className="flex flex-wrap gap-2">
-              <Badge variant="subtle">Status: {orderState.status.replace("_", " ")}</Badge>
+              <Badge variant="subtle">Panel status: {orderState.status.replace("_", " ")}</Badge>
               {orderState.provider_order_id ? (
                 <Badge variant="secondary">Submitted to provider</Badge>
               ) : null}

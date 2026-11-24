@@ -80,7 +80,7 @@ export default async function DashboardPage() {
     supabase.from("transactions").select("amount").eq("user_id", user.id).eq("type", "order_deduction"),
     supabase
       .from("orders")
-      .select("id, order_number, provider_order_id, service_id, services(name), quantity, price, status, created_at, currency")
+      .select("id, order_number, provider_order_id, provider_status:provider_response->>status, service_id, services(name), quantity, price, status, created_at, currency")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(8),
@@ -479,7 +479,7 @@ export default async function DashboardPage() {
                         <td className="px-4 py-3 text-right tabular-nums">{order.quantity.toLocaleString()}</td>
                         <td className="px-4 py-3 text-right font-medium tabular-nums">{formatCurrency(order.price, order.currency)}</td>
                         <td className="px-4 py-3">
-                          <OrderStatusBadge status={order.status as OrderStatus} />
+                          <OrderStatusBadge providerStatus={order.provider_status || (order.provider_order_id ? "Awaiting provider status" : null)} status={order.status as OrderStatus} />
                         </td>
                         <td className="px-4 py-3 text-right text-muted-foreground">{formatDateTime(order.created_at, "MMM d, h:mm a")}</td>
                       </tr>
@@ -498,7 +498,7 @@ export default async function DashboardPage() {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-sm font-semibold text-primary">#{order.order_number}</span>
-                        <OrderStatusBadge status={order.status as OrderStatus} />
+                        <OrderStatusBadge providerStatus={order.provider_status || (order.provider_order_id ? "Awaiting provider status" : null)} status={order.status as OrderStatus} />
                       </div>
                       {order.provider_order_id && (
                         <p className="break-all text-xs text-muted-foreground">Provider Order ID: {order.provider_order_id}</p>

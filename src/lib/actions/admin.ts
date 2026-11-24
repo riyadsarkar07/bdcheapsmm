@@ -954,6 +954,9 @@ export async function adminBulkRetryFailedOrdersAction(): Promise<ActionResult<{
       await supabase.from("orders").update({
         status: "processing",
         provider_order_id: String(result.order),
+        provider_response: { order: String(result.order) },
+        start_count: null,
+        remain: null,
         cancel_count: 0,
         error_message: null,
         charge: pricingCheck.providerCost,
