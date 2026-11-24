@@ -1,8 +1,11 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import * as React from "react";
 import {
   LayoutDashboard,
+  Wallet,
   Layers,
   ShoppingCart,
   ArrowDownToLine,
@@ -34,6 +37,7 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const t = useCustomerText();
+  const path = usePathname();
   const isAdmin = profile.role === "admin" && profile.status === "active";
 
   const groups = [
@@ -73,6 +77,7 @@ export function AppShell({
   ];
 
   return (
+    <>
     <DashboardShell
       profile={profile}
       groups={groups.map(group => ({ label: t(group.label), items: group.items.map(item => ({ ...item, label: t(item.label) })) }))}
@@ -83,7 +88,24 @@ export function AppShell({
           : undefined
       }
     >
-      {children}
+      <div className="pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">{children}</div>
     </DashboardShell>
+    <nav aria-label={t("Main navigation")} className="fixed inset-x-0 bottom-0 z-40 border-t bg-background pb-[env(safe-area-inset-bottom)] lg:hidden">
+      <div className="grid h-16 grid-cols-4">
+        {[
+          { href: "/dashboard", label: "Home", icon: LayoutDashboard },
+          { href: "/services", label: "Services", icon: Layers },
+          { href: "/orders", label: "Orders", icon: ShoppingCart },
+          { href: "/transactions", label: "Wallet", icon: Wallet },
+        ].map(({href, label, icon: Icon}) => {
+          const active = path === href || path.startsWith(href + "/") || (href === "/transactions" && path === "/add-funds");
+          return <Link key={href} prefetch={false} href={href} aria-current={active ? "page" : undefined}
+            className={`flex flex-col items-center justify-center gap-1 text-xs font-medium ${active ? "bg-primary/5 text-primary" : "text-muted-foreground"}`}>
+            <Icon className="h-5 w-5" />{t(label)}
+          </Link>;
+        })}
+      </div>
+    </nav>
+    </>
   );
 }

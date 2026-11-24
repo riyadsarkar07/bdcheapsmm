@@ -1,6 +1,6 @@
 "use client";
 
-import { CustomerText } from "@/components/customer-language";
+import { CustomerText, useCustomerText } from "@/components/customer-language";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -79,6 +79,7 @@ export function OrderDetailClient({
   isOwner: boolean;
   profit?: OrderProfit;
 }) {
+  const t = useCustomerText();
   const router = useRouter();
   const reduced = useReducedMotion();
   const orderState = order;
@@ -149,10 +150,9 @@ export function OrderDetailClient({
 
   const details = [
     { label: "Order Number", value: `#${orderState.order_number}`, copy: orderState.order_number },
-    { label: "Service", value: orderState.services?.name ?? "—" },
+    { label: "Provider Order ID", value: orderState.provider_order_id ?? "—", copy: orderState.provider_order_id ?? undefined },
     { label: "Quantity", value: orderState.quantity.toLocaleString() },
     { label: "Price", value: formatCurrency(orderState.price, orderState.currency) },
-    { label: "Provider Order ID", value: orderState.provider_order_id ?? "—", copy: orderState.provider_order_id ?? undefined },
     { label: "Provider status", value: providerStatus || "Not reported yet" },
     { label: "Provider", value: providerName ?? "—" },
     { label: "Start Count", value: orderState.start_count?.toLocaleString() ?? "—" },
@@ -171,11 +171,15 @@ export function OrderDetailClient({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="eyebrow mb-1"><CustomerText value="Order details" /></p>
-          <h1 className="truncate text-2xl font-bold">Order #{orderState.order_number}</h1>
-          <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{orderState.services?.name}</p>
+          <h1 className="break-words text-xl font-bold sm:text-2xl">{orderState.services?.name ?? t("Order details")}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t("Last provider check")} · {checkedAt ? formatDateTime(checkedAt) : t("Not checked yet")}</p>
         </div>
         <div className="flex items-center gap-2">
           <OrderStatusBadge providerStatus={providerStatus || (order.provider_order_id ? "Awaiting provider status" : null)} status={orderState.status} />
+          {order.provider_order_id && <Button size="icon" variant="ghost" aria-label={t("Refresh Status")} title={t("Refresh Status")}
+            disabled={action !== null} onClick={() => runAction("refresh", () => refreshOrderStatusAction(order.id))}>
+            {action === "refresh" ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+          </Button>}
           <Badge variant="secondary">{formatCurrency(orderState.price, orderState.currency)}</Badge>
         </div>
       </div>
@@ -196,25 +200,9 @@ export function OrderDetailClient({
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="mb-2 flex items-end justify-between">
-                <div>
-                  <p className="text-2xl font-bold tabular-nums">{progress == null ? "Awaiting delivery count" : `${progress}%`}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {delivered != null && `${delivered.toLocaleString()} of ${orderState.quantity.toLocaleString()} delivered`}
-                  </p>
-                </div>
-                <div className="text-right text-xs text-muted-foreground">
-                  {orderState.remain != null ? (
-                    <>
-                      <p className="font-semibold text-foreground tabular-nums">
-                        {orderState.remain.toLocaleString()}
-                      </p>
-                      <p>remaining</p>
-                    </>
-                  ) : (
-                    <p>Progress pending</p>
-                  )}
-                </div>
+              <div className="mb-3 flex items-baseline justify-between gap-3">
+                <p className="font-semibold">{delivered == null ? t("Awaiting delivery count") : t(`${delivered} of ${order.quantity} delivered`)}</p>
+                {progress != null && <span className="text-sm font-semibold text-primary">{progress}%</span>}
               </div>
               {progress != null && <Progress value={progress} className="h-2.5" />}
               {orderState.status === "completed" ? (
@@ -274,62 +262,25 @@ export function OrderDetailClient({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2.5">
-            {isOwner && (
-              <>
-                <Button asChild variant="outline"><Link href={`/support/new?order=${orderState.id}`}><CustomerText value="Get order support" /></Link></Button>
-                {orderState.service_id && <Button asChild variant="gradient"><Link href={`/services/${orderState.service_id}?repeat=${orderState.id}`}><CustomerText value="Order again" /></Link></Button>}
-              </>
-            )}
-            <Button asChild variant="gradient" className="w-full justify-start">
-              <a href={`/api/orders/${orderState.id}/invoice`} download={`invoice-${orderState.order_number}.pdf`}>
-                <FileDown />
-                <CustomerText value="Download Invoice" />
-              </a>
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start"
-              onClick={() => runAction("refresh", () => refreshOrderStatusAction(orderState.id))}
-              disabled={action !== null}
-            >
-              {action === "refresh" ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-              <CustomerText value="Refresh Status" />
-            </Button>
-            <Button
-              variant="warning"
-              className="w-full justify-start"
-              onClick={() => runAction("refill", () => refillOrderAction(orderState.id))}
-              disabled={action !== null || !canRefill || refillDisabled || !order.provider_order_id || (order.refill_count ?? 0) >= 2}
-            >
-              {action === "refill" ? <Loader2 className="animate-spin" /> : <RotateCcw />}
-              <CustomerText value={refillDisabled ? "Refill unavailable" : "Request refill"} />
-            </Button>
-            <p className="text-xs text-muted-foreground"><CustomerText value="Refill:" /> <CustomerText value={refillLabel} /></p>
-            <Button
-              variant="destructive"
-              className="w-full justify-start"
-              onClick={() => runAction("cancel", () => cancelOrderAction(orderState.id))}
-              disabled={action !== null || !canCancel}
-            >
-              {action === "cancel" ? <Loader2 className="animate-spin" /> : <XCircle />}
-              <CustomerText value="Cancel Order" />
-            </Button>
-            <Button
-              variant="success"
-              className="w-full justify-start"
-              onClick={() => setRetryOpen(true)}
-              disabled={action !== null || !canRetry}
-            >
-              <Zap />
-              <CustomerText value="Retry Order" />
-            </Button>
-
-            <Separator className="my-2" />
-
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Clock className="h-3.5 w-3.5" />
-              Last provider check: {checkedAt ? formatDateTime(checkedAt) : "No check time recorded"}
-            </div>
+            {isOwner && <>
+              {order.service_id && !canCancel && <Button asChild variant="gradient" className="w-full"><Link href={`/services/${order.service_id}?repeat=${order.id}`}>{t("Order again")}</Link></Button>}
+              <Button asChild variant={canCancel ? "gradient" : "outline"} className="w-full"><Link href={`/support/new?order=${order.id}`}>{t("Get order support")}</Link></Button>
+            </>}
+            {canRefill && !refillDisabled && order.provider_order_id && (order.refill_count ?? 0) < 2 && <Button
+              variant="outline" className="w-full" disabled={action !== null} onClick={() => runAction("refill", () => refillOrderAction(order.id))}>
+              <RotateCcw />{t("Request refill")}
+            </Button>}
+            {canRefill && <p className="text-xs text-muted-foreground">{t("Refill:")} {t(refillLabel)}</p>}
+            {canRetry && <Button variant="outline" className="w-full" disabled={action !== null} onClick={() => setRetryOpen(true)}><Zap />{t("Retry Order")}</Button>}
+            <details className="rounded-lg border px-3 py-2">
+              <summary className="cursor-pointer text-sm font-medium">{t("More options")}</summary>
+              <div className="mt-2 grid gap-2">
+                <Button asChild variant="ghost"><a href={`/api/orders/${order.id}/invoice`} download={`invoice-${order.order_number}.pdf`}><FileDown />{t("Download Invoice")}</a></Button>
+                {isOwner && canCancel && order.service_id && <Button asChild variant="ghost"><Link href={`/services/${order.service_id}?repeat=${order.id}`}>{t("Order again")}</Link></Button>}
+                {canCancel && order.provider_order_id && <Button variant="outline" className="text-destructive" disabled={action !== null || (order.cancel_count ?? 0) > 0}
+                  onClick={() => runAction("cancel", () => cancelOrderAction(order.id))}><XCircle />{t("Cancel Order")}</Button>}
+              </div>
+            </details>
             <div className="flex flex-wrap gap-2">
               <Badge variant="subtle">Panel status: {orderState.status.replace("_", " ")}</Badge>
               {orderState.provider_order_id ? (

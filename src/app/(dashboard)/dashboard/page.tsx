@@ -20,7 +20,6 @@ import {
   XCircle,
   ArrowRight,
   ArrowDownToLine,
-  ArrowUpRight,
   Layers,
   TrendingUp,
   Lightbulb,
@@ -170,20 +169,18 @@ export default async function DashboardPage() {
       <PageHeader
         eyebrow="Overview"
         title={`Welcome back, ${user.full_name?.split(" ")[0] ?? "User"}`}
-        description="Here's what's happening with your account today."
-      >
-        <Button asChild variant="outline">
-          <Link href="/transactions">
-            <TrendingUp /> <CustomerText value="Transactions" />
-          </Link>
-        </Button>
-        <Button asChild variant="gradient">
-          <Link href="/services">
-            <Layers /> <CustomerText value="New Order" />
-          </Link>
-        </Button>
-      </PageHeader>
-
+      />
+      <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/10 to-card p-5">
+        <div>
+          <p className="mb-1 flex items-center gap-2 text-sm text-muted-foreground"><Wallet className="h-4 w-4" /><CustomerText value="Wallet balance" /></p>
+          <p className="text-3xl font-bold tracking-tight">{formatCurrency(user.balance, user.currency)}</p>
+          <div className="mt-2 flex gap-4 text-sm text-primary">
+            <Link href="/add-funds"><CustomerText value="Add Funds" /></Link>
+            <Link href="/transactions"><CustomerText value="History" /></Link>
+          </div>
+        </div>
+        <Button asChild variant="gradient"><Link href="/services"><Layers /><CustomerText value="New Order" /></Link></Button>
+      </section>
       <section className="glass-card rounded-xl p-4">
         <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold"><CustomerText value="My active orders" /></h2>
           <Link className="text-sm text-primary" href="/orders"><CustomerText value="View all orders" /></Link></div>
@@ -194,49 +191,7 @@ export default async function DashboardPage() {
             <span className="text-xs text-muted-foreground"><CustomerText value="Last provider check" /> · {order.checked_at ? new Date(order.checked_at).toLocaleString("en-GB", {timeZone: "Asia/Dhaka"}) + " (Dhaka)" : <CustomerText value="Not checked yet" />}</span>
           </Link>)}
       </section>
-      {/* Wallet hero + primary stats */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="relative overflow-hidden rounded-2xl gradient-bg p-5 text-white shadow-glow lg:col-span-1">
-          <div
-            className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/15 blur-2xl"
-            aria-hidden
-          />
-          <div
-            className="pointer-events-none absolute -bottom-16 -left-10 h-40 w-40 rounded-full bg-cyan-300/20 blur-2xl"
-            aria-hidden
-          />
-          <div className="relative">
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2 text-sm font-medium text-white/80">
-                <Wallet className="h-4 w-4" /> <CustomerText value="Wallet balance" />
-              </span>
-              <Badge className="border-white/20 bg-white/15 text-white">
-                {user.currency}
-              </Badge>
-            </div>
-            <p className="mt-3 text-3xl font-bold tracking-tight tabular-nums">
-              <AnimatedNumber
-                value={Number(user.balance ?? 0)}
-                format="currency"
-                currency={user.currency}
-              />
-            </p>
-            <div className="mt-4 flex items-center gap-2">
-              <Button asChild size="sm" className="bg-white text-primary hover:bg-white/90">
-                <Link href="/add-funds">
-                  <ArrowDownToLine /> <CustomerText value="Add Funds" />
-                </Link>
-              </Button>
-              <Button asChild size="sm" variant="ghost" className="text-white hover:bg-white/15">
-                <Link href="/transactions">
-                  <CustomerText value="History" /> <ArrowUpRight />
-                </Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:col-span-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <StatCard
             title="Total Orders"
             value={<AnimatedNumber value={totalOrders} />}
@@ -274,7 +229,6 @@ export default async function DashboardPage() {
             icon={<TrendingUp className="h-5 w-5" />}
             color="primary"
           />
-        </div>
       </div>
 
       {/* Chart + order status overview */}

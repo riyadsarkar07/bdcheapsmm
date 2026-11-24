@@ -11,8 +11,6 @@ import {
   Search,
   Clock,
   ArrowRight,
-  Minus,
-  Plus,
   Heart,
   HeartOff,
   Hash,
@@ -497,27 +495,14 @@ export function ServicesBrowser() {
 
                 <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-snug">{service.name}</h3>
 
-                <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                  <span className="flex items-center gap-1">
-                    <Minus className="h-3 w-3" /> {service.min_quantity.toLocaleString()}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Plus className="h-3 w-3" /> {service.max_quantity.toLocaleString()}
-                  </span>
-                  {service.average_time ? (
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" /> {service.average_time}
-                    </span>
-                  ) : null}
-                </div>
-
+                <p className="mt-2 text-xl font-bold tabular-nums text-primary">{formatUsd(service.price, 4)}
+                  <span className="ml-1 text-xs font-medium text-muted-foreground">{t("per 1,000")}</span>
+                </p>
+                <p className="mb-4 mt-1 text-sm text-muted-foreground">
+                  {t("Minimum")} {service.min_quantity.toLocaleString()} · {t("Refill")}: {t(refillTerms(service.meta, service.name, service.description ?? "").label)}
+                </p>
                 <div className="mt-auto flex items-center justify-between gap-2 border-t pt-3">
-                  <div>
-                    <p className="text-lg font-bold text-primary tabular-nums">
-                      {formatUsd(service.price)}
-                      <span className="text-xs font-normal text-muted-foreground"> / 1k</span>
-                    </p>
-                  </div>
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">{service.average_time && <><Clock className="h-3 w-3" />{service.average_time}</>}</span>
                   <Button
                     size="sm"
                     variant={isSelected ? "gradient" : "outline"}

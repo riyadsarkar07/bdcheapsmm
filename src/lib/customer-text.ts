@@ -1,4 +1,9 @@
 const bangla: Record<string, string> = {
+  "Home": "হোম",
+  "Main navigation": "প্রধান নেভিগেশন",
+  "More options": "আরও অপশন",
+  "Minimum": "ন্যূনতম",
+  "per 1,000": "প্রতি ১,০০০",
   "Overview": "একনজরে",
   "Dashboard": "ড্যাশবোর্ড",
   "Services": "সার্ভিস",
@@ -201,6 +206,8 @@ const bangla: Record<string, string> = {
 export function customerText(language: string, text: string) {
   if (language !== "bn") return text;
   if (text.startsWith("Welcome back, ")) return "স্বাগতম, " + text.slice(14);
+  const delivery = text.match(/^(\d+) of (\d+) delivered$/);
+  if (delivery) return delivery[2] + "টির মধ্যে " + delivery[1] + "টি ডেলিভার হয়েছে";
   const days = text.match(/^(\d+) days$/);
   if (days) return days[1] + " দিন";
   const platform = text.match(/^Use a (.+) link for this service\.$/);

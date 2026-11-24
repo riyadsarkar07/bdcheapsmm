@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { CustomerText } from "@/components/customer-language";
 import * as React from "react";
 import { useRouter } from "next/navigation";
@@ -93,6 +94,15 @@ export function OrderForm({
   averageTime,
 }: OrderFormProps) {
   const t = useCustomerText();
+  const formId = React.useId();
+  const formNode = React.useRef<HTMLFormElement>(null);
+  const [formVisible, setFormVisible] = React.useState(false);
+  React.useEffect(() => {
+    if (!formNode.current) return;
+    const observer = new IntersectionObserver(([entry]) => setFormVisible(entry.isIntersecting), { rootMargin: "0px 0px -100px 0px" });
+    observer.observe(formNode.current);
+    return () => observer.disconnect();
+  }, []);
   const router = useRouter();
   const queryClient = useQueryClient();
   const reduced = useReducedMotion();
@@ -107,6 +117,9 @@ export function OrderForm({
   const suggested = firstBillableQuantity <= maxQuantity ? firstBillableQuantity : minQuantity;
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema.superRefine((values, ctx) => {
+      if (values.quantity < minQuantity || values.quantity > maxQuantity) {
+        ctx.addIssue({ code: "custom", path: ["quantity"], message: t("Quantity range") + ": " + minQuantity + " – " + maxQuantity });
+      }
       const message = targetLinkError(values.link, platform);
       if (message) ctx.addIssue({ code: "custom", path: ["link"], message: t(message) });
     })),
@@ -197,6 +210,9 @@ export function OrderForm({
   const insufficient = chargeable && !hasSufficientBalance(balance, total);
   const canIncrease = !applied && pricePerUnit > 0 && quantity < firstBillableQuantity && firstBillableQuantity <= maxQuantity;
 
+  const reviewLabel = t(needsQuote ? "Apply coupon to review" : !chargeable ? "Review pricing" : insufficient ? "Insufficient Balance" : "Review Order");
+  const reviewDisabled = loading || !chargeable || insufficient || needsQuote;
+
   function adjustQuantity(delta: number) {
     const current = Number(form.getValues("quantity")) || minQuantity;
     const next = Math.min(maxQuantity, Math.max(minQuantity, current + delta));
@@ -226,7 +242,7 @@ export function OrderForm({
         <p className="mb-3 text-sm text-muted-foreground"><CustomerText value="The service limits changed. Check the adjusted quantity before placing this order." /></p>
       )}
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <form noValidate id={formId} ref={formNode} onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <FormField
             control={form.control}
             name="quantity"
@@ -417,9 +433,9 @@ export function OrderForm({
             </div>
           ) : null}
 
-          <Button type="submit" variant="gradient" className="w-full" disabled={loading || !chargeable || insufficient || needsQuote}>
+          <Button type="submit" variant="gradient" className={formVisible ? "hidden w-full lg:inline-flex" : "w-full"} disabled={reviewDisabled}>
             {loading ? <Loader2 className="animate-spin" /> : <Zap />}
-            {t(needsQuote ? "Apply coupon to review" : !chargeable ? "Review pricing" : insufficient ? "Insufficient Balance" : "Review Order")}
+            {reviewLabel}
           </Button>
           <p className="flex items-center justify-center gap-1.5 text-center text-[11px] text-muted-foreground">
             <ShieldCheck className="h-3.5 w-3.5" />
@@ -428,6 +444,12 @@ export function OrderForm({
         </form>
       </Form>
 
+      {formVisible && !confirmValues && !conflicts && createPortal(
+        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-3 border-t bg-background px-4 py-2 shadow-sm lg:hidden">
+          <div className="shrink-0"><p className="text-xs text-muted-foreground">{t("Total charge")}</p>
+            <p className="font-semibold tabular-nums">{Number.isFinite(total) ? formatCurrency(total, currency) : t("Unavailable")}</p></div>
+          <Button variant="gradient" type="submit" form={formId} disabled={reviewDisabled}>{reviewLabel}</Button>
+        </div>, document.body)}
       {/* Duplicate URL warning */}
       <Dialog open={!!conflicts} onOpenChange={(open) => !open && setConflicts(null)}>
         <DialogContent>
