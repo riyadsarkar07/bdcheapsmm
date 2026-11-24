@@ -179,7 +179,11 @@ export function OrderForm({
     }
   }
 
-  const insufficient = !hasSufficientBalance(balance, total);
+  const chargeable = Number.isFinite(total) && total > 0;
+  const insufficient = chargeable && !hasSufficientBalance(balance, total);
+  // A raw USD total of half a cent rounds to the first billable cent in checkout.
+  const firstBillableQuantity = Math.max(minQuantity, Math.ceil(5 / pricePerUnit));
+  const canIncrease = !applied && pricePerUnit > 0 && quantity < firstBillableQuantity && firstBillableQuantity <= maxQuantity;
 
   function adjustQuantity(delta: number) {
     const current = Number(form.getValues("quantity")) || minQuantity;
@@ -366,13 +370,25 @@ export function OrderForm({
             </div>
           </div>
 
+          {!chargeable && !needsQuote && (
+            <div role="status" className="space-y-2 rounded-lg border p-3 text-sm">
+              <p>{!Number.isFinite(total) ? "No exchange rate is configured for your wallet currency."
+                : canIncrease ? "This quantity rounds to a $0.00 order. Increase the quantity to get a payable total."
+                : "This order has no payable total. Check the quantity, service or coupon."}</p>
+              {canIncrease && Number.isFinite(total) && (
+                <Button type="button" size="sm" variant="outline" onClick={() => form.setValue("quantity", firstBillableQuantity, { shouldValidate: true })}>
+                  Use quantity {firstBillableQuantity.toLocaleString()}
+                </Button>
+              )}
+            </div>
+          )}
           {insufficient && !needsQuote ? (
             <div className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                 <div className="space-y-1">
                   <p className="font-semibold text-destructive">
-                    {Number.isFinite(total) ? "Insufficient balance. Please add funds to place this order." : "No exchange rate is configured for your wallet currency."}
+                    Insufficient balance. Please add funds to place this order.
                   </p>
                   <p className="text-muted-foreground">
                     Required: {Number.isFinite(total) ? formatCurrency(total, currency) : "Unavailable"} · Current balance: {formatCurrency(balance, currency)}
@@ -387,9 +403,9 @@ export function OrderForm({
             </div>
           ) : null}
 
-          <Button type="submit" variant="gradient" className="w-full" disabled={loading || insufficient || needsQuote}>
+          <Button type="submit" variant="gradient" className="w-full" disabled={loading || !chargeable || insufficient || needsQuote}>
             {loading ? <Loader2 className="animate-spin" /> : <Zap />}
-            {needsQuote ? "Apply coupon to review" : insufficient ? "Insufficient Balance" : "Review Order"}
+            {needsQuote ? "Apply coupon to review" : !chargeable ? "Review pricing" : insufficient ? "Insufficient Balance" : "Review Order"}
           </Button>
           <p className="flex items-center justify-center gap-1.5 text-center text-[11px] text-muted-foreground">
             <ShieldCheck className="h-3.5 w-3.5" />
