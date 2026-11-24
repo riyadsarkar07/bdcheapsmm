@@ -170,7 +170,7 @@ export default async function DashboardPage() {
         eyebrow="Overview"
         title={`Welcome back, ${user.full_name?.split(" ")[0] ?? "User"}`}
       />
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/10 to-card p-5">
+      <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/20 bg-gradient-to-r from-[var(--wallet-tint)] to-card p-5">
         <div>
           <p className="mb-1 flex items-center gap-2 text-sm text-muted-foreground"><Wallet className="h-4 w-4" /><CustomerText value="Wallet balance" /></p>
           <p className="text-3xl font-bold tracking-tight">{formatCurrency(user.balance, user.currency)}</p>
@@ -179,7 +179,7 @@ export default async function DashboardPage() {
             <Link href="/transactions"><CustomerText value="History" /></Link>
           </div>
         </div>
-        <Button asChild variant="gradient"><Link href="/services"><Layers /><CustomerText value="New Order" /></Link></Button>
+        <Button asChild className="bg-[#6d28d9] text-white hover:bg-[#5b21b6]"><Link href="/services"><Layers /><CustomerText value="New Order" /></Link></Button>
       </section>
       <section className="glass-card rounded-xl p-4">
         <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold"><CustomerText value="My active orders" /></h2>
@@ -298,7 +298,7 @@ export default async function DashboardPage() {
                 href={action.href}
                 className="group flex flex-col gap-2 rounded-xl border p-3 transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-elevated"
               >
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:gradient-bg group-hover:text-white">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-accent">
                   <action.icon className="h-4 w-4" />
                 </span>
                 <span className="text-sm font-semibold leading-tight"><CustomerText value={action.label} /></span>
@@ -407,7 +407,7 @@ export default async function DashboardPage() {
             title="No orders yet"
             description="Place your first order and watch your social media grow."
             action={
-              <Button asChild variant="gradient">
+              <Button asChild className="bg-[#6d28d9] text-white hover:bg-[#5b21b6]">
                 <Link href="/services">
                   <Layers /> Browse Services
                 </Link>
