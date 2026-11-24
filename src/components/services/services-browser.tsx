@@ -409,6 +409,7 @@ export function ServicesBrowser() {
           <div className="lg:col-span-2">
             <OrderForm
               key={selected.id}
+              providerServiceId={selected.provider_service_id}
               serviceId={selected.id}
               serviceName={selected.name}
               refillLabel={refillTerms(selected.meta, selected.name, selected.description ?? "").label}
@@ -471,7 +472,7 @@ export function ServicesBrowser() {
                     </div>
                     <div className="min-w-0">
                       <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        {PLATFORM_LABELS[servicePlatform] ?? servicePlatform}
+                        {PLATFORM_LABELS[servicePlatform] ?? servicePlatform}{service.provider_service_id && ` · #${service.provider_service_id}`}
                       </p>
                       {service.is_featured ? (
                         <Badge variant="info" className="mt-0.5 px-1.5 py-0 text-[9px]">Featured</Badge>

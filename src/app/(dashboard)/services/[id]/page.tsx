@@ -30,7 +30,7 @@ export default async function ServiceOrderPage({
   const { data: service } = await supabase
     .from("services")
     .select(
-      "id, name, slug, description, meta, price, min_quantity, max_quantity, average_time, type, is_active, is_featured, category_id, categories(name, slug, icon), providers(id, name)"
+      "id, provider_service_id, name, slug, description, meta, price, min_quantity, max_quantity, average_time, type, is_active, is_featured, category_id, categories(name, slug, icon), providers(id, name)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -127,11 +127,12 @@ export default async function ServiceOrderPage({
         <div className="order-1 lg:order-2 lg:col-span-2">
           <OrderForm
             key={repeat ?? service.id}
+            providerServiceId={service.provider_service_id}
             serviceId={service.id}
             previous={previous}
             platform={detectPlatform(service.categories?.name, service.categories?.slug)}
             serviceName={service.name}
-              refillLabel={refillTerms(service.meta, service.name, service.description ?? "").label}
+            refillLabel={refillTerms(service.meta, service.name, service.description ?? "").label}
             pricePerUnit={Number(service.price)}
             minQuantity={service.min_quantity}
             maxQuantity={service.max_quantity}

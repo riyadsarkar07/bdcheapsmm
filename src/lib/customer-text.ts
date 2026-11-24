@@ -1,4 +1,6 @@
 const bangla: Record<string, string> = {
+  "Service ID": "সার্ভিস আইডি",
+  "Paste your target link": "টার্গেট লিংক পেস্ট করুন",
   "Home": "হোম",
   "Main navigation": "প্রধান নেভিগেশন",
   "More options": "আরও অপশন",
@@ -208,6 +210,8 @@ export function customerText(language: string, text: string) {
   if (text.startsWith("Welcome back, ")) return "স্বাগতম, " + text.slice(14);
   const delivery = text.match(/^(\d+) of (\d+) delivered$/);
   if (delivery) return delivery[2] + "টির মধ্যে " + delivery[1] + "টি ডেলিভার হয়েছে";
+  const listedDays = text.match(/^Listed as (\d+) days · automatic refill unavailable$/);
+  if (listedDays) return "সার্ভিসে " + listedDays[1] + " দিন লেখা আছে · স্বয়ংক্রিয় রিফিল বন্ধ";
   const days = text.match(/^(\d+) days$/);
   if (days) return days[1] + " দিন";
   const platform = text.match(/^Use a (.+) link for this service\.$/);

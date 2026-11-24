@@ -17,7 +17,6 @@ import {
   AlertTriangle,
   Wallet,
   Clock,
-  ShieldCheck,
   Minus,
   Plus,
   Link2,
@@ -65,6 +64,7 @@ const formSchema = z.object({
 interface OrderFormProps {
   serviceId: string;
   serviceName: string;
+  providerServiceId: string | number | null;
   platform: string;
   refillLabel: string;
   /** Retail price per 1000 units (same as the provider rate + markup). */
@@ -82,6 +82,7 @@ interface OrderFormProps {
 export function OrderForm({
   serviceId,
   serviceName,
+  providerServiceId,
   platform,
   refillLabel,
   pricePerUnit,
@@ -223,21 +224,18 @@ export function OrderForm({
     <motion.div
       initial={reduced ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glass-card rounded-xl p-5 sm:p-6"
+      className="glass-card rounded-xl p-4 sm:p-6"
     >
-      <div className="mb-5 flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="flex items-center gap-2 text-lg font-bold">
             <ShoppingCart className="h-5 w-5 text-primary" /> <CustomerText value="Place Order" />
           </h2>
-          <p className="mt-1 break-words text-sm text-muted-foreground">{serviceName}</p>
+          {providerServiceId && <Badge variant="secondary">{t("Service ID")} #{providerServiceId}</Badge>}
         </div>
-        <Badge variant="info" className="shrink-0">
-          {formatUsd(pricePerUnit)} / 1k
-        </Badge>
+        <p className="mt-2 break-words text-sm text-muted-foreground">{serviceName}</p>
       </div>
 
-      <p className="mb-3 text-sm"><strong><CustomerText value="Refill:" /></strong> {t(refillLabel)}</p>
       {previous && previous.quantity !== form.formState.defaultValues?.quantity && (
         <p className="mb-3 text-sm text-muted-foreground"><CustomerText value="The service limits changed. Check the adjusted quantity before placing this order." /></p>
       )}
@@ -315,77 +313,11 @@ export function OrderForm({
             )}
           />
 
-          <FormField
-            control={form.control}
-            name="link"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel><CustomerText value="Target Link" /></FormLabel>
-                <FormControl>
-                  <div className="relative">
-                    <Link2 className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      className="pl-9"
-                      placeholder={linkPlaceholder}
-                      {...field}
-                    />
-                  </div>
-                </FormControl>
-                <p className="break-all text-xs text-muted-foreground">{t("Example link")}: {linkPlaceholder}</p>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="coupon"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel><CustomerText value="Coupon (optional)" /></FormLabel>
-                <FormControl>
-                  <div className="relative">
-                    <Tag className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder={t("Discount code")}
-                      className="pl-9"
-                      onChange={(e) => {
-                        field.onChange(e);
-                        setQuote(null);
-                      }}
-                      value={field.value}
-                      onBlur={field.onBlur}
-                      name={field.name}
-                    />
-                  </div>
-                </FormControl>
-                {coupon && (
-                  <Button type="button" size="sm" variant="outline" disabled={loading || applied} onClick={applyCoupon}>
-                    {t(applied ? "Coupon applied" : "Apply coupon")}
-                  </Button>
-                )}
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <div className="rounded-xl border bg-muted/40 p-4">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground"><CustomerText value="Quantity" /></span>
-              <span className="font-medium tabular-nums">{quantity.toLocaleString()}</span>
-            </div>
-            <div className="mt-1.5 flex justify-between text-sm">
-              <span className="text-muted-foreground"><CustomerText value="Rate (per 1k)" /></span>
-              <span className="tabular-nums">{formatUsd(pricePerUnit)}</span>
-            </div>
-            <div className="mt-1.5 flex justify-between text-sm"><span><CustomerText value="Quantity range" /></span><span>{minQuantity.toLocaleString()} – {maxQuantity.toLocaleString()}</span></div>
+          <div className="space-y-2 rounded-xl border bg-muted/40 p-3 text-sm">
+            <div className="flex justify-between gap-3"><span className="text-muted-foreground">{t("Rate (per 1k)")}</span><span className="tabular-nums">{formatUsd(pricePerUnit, 4)}</span></div>
+            <div className="flex justify-between gap-3"><span className="text-muted-foreground">{t("Refill")}</span><span className="text-right">{t(refillLabel)}</span></div>
             {applied && <div className="mt-1.5 flex justify-between text-sm text-success"><span><CustomerText value="Coupon discount" /></span><span>−{formatCurrency(walletCharge(computeOrderCharge(pricePerUnit, quantity), currency) - total, currency)}</span></div>}
-              <div className="mt-1.5 flex items-center justify-between text-sm">
-                <span className="flex items-center gap-1 text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5" /> <CustomerText value="Est. delivery" />
-                </span>
-                <span>{averageTime || t("Not provided")}</span>
-              </div>
+            {averageTime && <div className="flex justify-between gap-3"><span className="text-muted-foreground">{t("Est. delivery")}</span><span>{averageTime}</span></div>}
             <div className="mt-2.5 flex items-center justify-between border-t pt-2.5">
               <span className="font-medium"><CustomerText value="Wallet charge" /></span>
               <span className="text-xl font-bold text-primary tabular-nums">
@@ -433,14 +365,67 @@ export function OrderForm({
             </div>
           ) : null}
 
+          <FormField
+            control={form.control}
+            name="link"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel><CustomerText value="Target Link" /></FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Link2 className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      className="pl-9"
+                      placeholder={t("Paste your target link")}
+                      {...field}
+                    />
+                  </div>
+                </FormControl>
+                <p className="break-all text-xs text-muted-foreground">{t("Example link")}: {linkPlaceholder}</p>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <details className="rounded-lg border px-3 py-2">
+            <summary className="cursor-pointer text-sm font-medium">{t("Coupon (optional)")}{applied && " ✓"}</summary>
+            <FormField
+              control={form.control}
+              name="coupon"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="sr-only">{t("Discount code")}</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Tag className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder={t("Discount code")}
+                        className="pl-9"
+                        onChange={(e) => {
+                          field.onChange(e);
+                          setQuote(null);
+                        }}
+                        value={field.value}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                      />
+                    </div>
+                  </FormControl>
+                  {coupon && (
+                    <Button type="button" size="sm" variant="outline" disabled={loading || applied} onClick={applyCoupon}>
+                      {t(applied ? "Coupon applied" : "Apply coupon")}
+                    </Button>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </details>
           <Button type="submit" variant="gradient" className={formVisible ? "hidden w-full lg:inline-flex" : "w-full"} disabled={reviewDisabled}>
             {loading ? <Loader2 className="animate-spin" /> : <Zap />}
             {reviewLabel}
           </Button>
-          <p className="flex items-center justify-center gap-1.5 text-center text-[11px] text-muted-foreground">
-            <ShieldCheck className="h-3.5 w-3.5" />
-            <CustomerText value="Secure checkout · charged from your wallet" />
-          </p>
+
         </form>
       </Form>
 
