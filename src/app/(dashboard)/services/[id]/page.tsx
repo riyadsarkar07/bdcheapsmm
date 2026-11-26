@@ -19,7 +19,7 @@ export const maxDuration = 60;
 export default async function ServiceOrderPage({
   params, searchParams,
 }: {
-  searchParams: Promise<{ repeat?: string }>;
+  searchParams: Promise<{ repeat?: string; back?: string }>;
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
@@ -36,7 +36,7 @@ export default async function ServiceOrderPage({
     .maybeSingle();
 
   if (!service || !service.is_active) notFound();
-  const { repeat } = await searchParams;
+  const { repeat, back } = await searchParams;
   const previous = repeat ? (await supabase.from("orders").select("link,quantity")
     .eq("id", repeat).eq("service_id", id).eq("user_id", user.id).maybeSingle()).data : null;
   if (repeat && !previous) notFound();
@@ -44,7 +44,7 @@ export default async function ServiceOrderPage({
   return (
     <div>
       <Button asChild variant="ghost" size="sm" className="mb-4 -ml-2">
-        <Link href="/services">
+        <Link href={back?.startsWith("/services?") ? back : "/services"}>
           <ArrowLeft /> Back to services
         </Link>
       </Button>

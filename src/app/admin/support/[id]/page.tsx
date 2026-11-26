@@ -1,3 +1,4 @@
+import { DropReportDetails } from "@/components/support/drop-report-details";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/guards";
 import { TicketThread } from "@/components/support/ticket-thread";
@@ -19,5 +20,5 @@ export default async function AdminSupportTicketPage({
 
   if (!ticket) notFound();
 
-  return <TicketThread ticket={ticket} isAdmin />;
+  return <>{ticket.category === "Follower drop" && <DropReportDetails ticketId={id} />}<TicketThread ticket={ticket} isAdmin /></>;
 }

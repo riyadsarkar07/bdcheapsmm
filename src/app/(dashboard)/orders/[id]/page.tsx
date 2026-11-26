@@ -46,15 +46,23 @@ export default async function OrderDetailPage({
     : { data: null };
 
   const terms = refillTerms(order.services?.meta, order.services?.name, order.services?.description ?? "");
-  const [events, credits] = await Promise.all([
-    createAdminClient().from("logs").select("id,created_at,description").eq("entity_type", "orders")
-      .eq("entity_id", id).in("action", ["order_refill", "order_cancel"]).order("created_at"),
+  const [events, credits, reports] = await Promise.all([
+    createAdminClient().from("logs").select("id,created_at,description,action,submitted:meta->>provider_submitted,reference:meta->>provider_order_id").eq("entity_type", "orders")
+      .eq("entity_id", id).in("action", ["order_create","order_refill", "order_cancel"]).order("created_at"),
     supabase.from("transactions").select("id,created_at,amount,currency").eq("user_id", order.user_id)
       .eq("reference_id", id).eq("reference_type", "orders").eq("type", "refund"),
+    supabase.from("order_drop_reports").select("ticket_id,created_at").eq("order_id",id),
   ]);
+  const snapshot = order.provider_response && typeof order.provider_response === "object" && !Array.isArray(order.provider_response) ? order.provider_response : {};
   const history = [
-    ...(events.data ?? []).map(e => ({ ...e, text: e.description })),
-    ...(credits.data ?? []).map(e => ({ ...e, text: "Wallet credited " + formatCurrency(e.amount, e.currency) })),
+    { id:"placed", created_at:order.created_at, text:"Order placed", href:"" },
+    ...(typeof snapshot.status === "string" && typeof snapshot.panel_checked_at === "string" ? [
+      {id:"provider-status", created_at:snapshot.panel_checked_at, text:snapshot.status, href:"", provider:true}
+    ] : []),
+    ...(reports.data ?? []).map(r => ({id:r.ticket_id, created_at:r.created_at, text:"Follower drop reported", href:(isAdmin ? "/admin/support/" : "/support/") + r.ticket_id})),
+    ...(events.data ?? []).filter(e => e.action !== "order_create" || (e.submitted === "true" && e.reference && e.reference === order.provider_order_id))
+      .map(e => ({id:e.id, created_at:e.created_at, href:"", text:e.action === "order_create" ? "Provider acknowledged order" : e.description ?? ""})),
+    ...(credits.data ?? []).map(e => ({ ...e, href:"", text: "Wallet credited " + formatCurrency(e.amount, e.currency) })),
   ].sort((a, b) => a.created_at.localeCompare(b.created_at));
 
   const profit = isAdmin
@@ -78,9 +86,9 @@ export default async function OrderDetailPage({
         profit={profit}
       />
       <section className="mt-5 space-y-3 rounded-xl border bg-card p-5">
-        <h2 className="font-semibold"><CustomerText value="Refill and refund history" /></h2>
-        {history.map(event => <div key={event.id} className="text-sm"><time className="text-muted-foreground">{new Date(event.created_at).toLocaleString("en-GB", { timeZone: "Asia/Dhaka" })} (Dhaka)</time> · {event.text}</div>)}
-        {(events.error || credits.error) ? <p>Some history could not be loaded.</p> : history.length === 0 && <p className="text-sm text-muted-foreground"><CustomerText value="No refill or refund activity recorded." /></p>}
+        <h2 className="font-semibold"><CustomerText value="Order timeline" /></h2>
+        {history.map(event => <div key={event.id} className="text-sm"><time className="text-muted-foreground">{new Date(event.created_at).toLocaleString("en-GB", { timeZone: "Asia/Dhaka" })} (Dhaka)</time> · {"provider" in event && <><CustomerText value="Provider status" /> · </>}{event.href ? <Link className="text-primary underline" href={event.href}><CustomerText value={event.text} /></Link> : <CustomerText value={event.text} />}</div>)}
+        {(events.error || credits.error || reports.error) ? <p>Some history could not be loaded.</p> : history.length === 0 && <p className="text-sm text-muted-foreground"><CustomerText value="No refill or refund activity recorded." /></p>}
       </section>
     </div>
   );

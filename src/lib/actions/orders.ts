@@ -453,7 +453,7 @@ export async function refillOrderAction(orderId: string, askProvider = false): P
     .single();
   if (!provider) return fail("Provider not found.");
 
-  await writeLog({ userId: user.id, action: "order_refill", entityType: "orders", entityId: orderId, description: "Provider refill requested." });
+  await writeLog({ userId: user.id, action: "order_refill", entityType: "orders", entityId: orderId, description: isAdminProfile(user) ? "Admin requested a provider refill." : "Provider refill requested." });
   let receipt;
   try {
     receipt = await providerApi.refill(provider, order.provider_order_id);

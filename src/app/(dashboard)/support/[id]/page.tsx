@@ -1,3 +1,4 @@
+import { DropReportDetails } from "@/components/support/drop-report-details";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -32,6 +33,7 @@ export default async function TicketDetailPage({
           <ArrowLeft /> Back to support
         </Link>
       </Button>
+      {ticket.category === "Follower drop" && <DropReportDetails ticketId={id} />}
       <TicketThread ticket={ticket} isAdmin={isAdminProfile(user)} />
     </div>
   );

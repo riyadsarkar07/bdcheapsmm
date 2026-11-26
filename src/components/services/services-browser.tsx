@@ -97,11 +97,11 @@ export function ServicesBrowser() {
   const [search, setSearch] = React.useState(searchParams.get("q") ?? "");
   const [debouncedSearch, setDebouncedSearch] = React.useState(search);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
-  const [kind, setKind] = React.useState("");
-  const [refillOnly, setRefillOnly] = React.useState(false);
-  const [savedOnly, setSavedOnly] = React.useState(false);
-  const [descending, setDescending] = React.useState(false);
-  const [limit, setLimit] = React.useState(PAGE_SIZE);
+  const [kind, setKind] = React.useState(searchParams.get("kind") ?? "");
+  const [refillOnly, setRefillOnly] = React.useState(searchParams.get("refill") === "1");
+  const [savedOnly, setSavedOnly] = React.useState(searchParams.get("saved") === "1");
+  const [descending, setDescending] = React.useState(searchParams.get("desc") === "1");
+  const [limit, setLimit] = React.useState(Math.min(1000, Math.max(PAGE_SIZE, Number(searchParams.get("limit")) || PAGE_SIZE)));
   const detailRef = React.useRef<HTMLDivElement>(null);
   const servicesRef = React.useRef<HTMLDivElement>(null);
   const prevCategory = React.useRef<string | null>(category);
@@ -111,10 +111,19 @@ export function ServicesBrowser() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  const [comparison, setComparison] = React.useState<ServiceRow[]>([]);
+  const comparisonRef = React.useRef<HTMLElement>(null);
   React.useEffect(() => {
+    if (comparison.length === 2) comparisonRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [comparison.length]);
+  const filters = JSON.stringify([platform, category, kind, refillOnly, savedOnly, descending, debouncedSearch]);
+  const previousFilters = React.useRef(filters);
+  React.useEffect(() => {
+    if (filters === previousFilters.current) return;
+    previousFilters.current = filters;
     setLimit(PAGE_SIZE);
     setSelectedId(null);
-  }, [platform, category, kind, refillOnly, savedOnly, descending, debouncedSearch]);
+  }, [filters]);
 
   const { data: categories } = useQuery({
     queryKey: ["categories"],
@@ -220,6 +229,8 @@ export function ServicesBrowser() {
     : null;
   function setFilter(next: { p?: string; category?: string | null }) {
     const params = new URLSearchParams(searchParams.toString());
+    params.delete("focus");
+    params.delete("limit");
     if (next.p) params.set("p", next.p);
     else if (next.p === "") params.delete("p");
     if (next.category) params.set("category", next.category);
@@ -240,9 +251,29 @@ export function ServicesBrowser() {
   }
 
   function selectService(service: ServiceRow) {
+    if (window.matchMedia("(max-width: 767px)").matches) {
+      const params = new URLSearchParams(searchParams.toString());
+      for (const [key, value] of Object.entries({ q: search, kind, refill: refillOnly ? "1" : "", saved: savedOnly ? "1" : "", desc: descending ? "1" : "", limit: String(limit), focus: service.id })) {
+        if (value) params.set(key, value);
+        else params.delete(key);
+      }
+      const back = "/services?" + params.toString();
+      window.history.replaceState(window.history.state, "", back);
+      router.push("/services/" + service.id + "?back=" + encodeURIComponent(back));
+      return;
+    }
     setSelectedId(service.id);
     requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
+
+  const focus = searchParams.get("focus");
+  const restoredFocus = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (focus && focus !== restoredFocus.current && services?.some(service => service.id === focus)) {
+      restoredFocus.current = focus;
+      document.getElementById("service-" + focus)?.scrollIntoView({ block: "center" });
+    }
+  }, [focus, services]);
 
   const hasMore = (services?.length ?? 0) >= limit;
 
@@ -429,6 +460,14 @@ export function ServicesBrowser() {
         </div>
       ) : null}
 
+      {comparison.length > 0 && <section ref={comparisonRef} aria-live="polite" className="glass-card my-4 p-4">
+        <div className="mb-3 flex items-center justify-between"><h2 className="font-semibold">{t("Compare services")} ({comparison.length}/2)</h2>
+          <Button size="sm" variant="ghost" onClick={() => setComparison([])}>{t("Clear")}</Button></div>
+        {comparison.length === 1 && <p className="mb-2 text-sm">{t("Select a second service")}</p>}
+        <table className="w-full table-fixed text-left text-sm"><thead><tr><th scope="col">{t("Service")}</th>{comparison.map(item => <th className="break-words p-2 align-top" key={item.id}>{item.name}</th>)}</tr></thead>
+          <tbody>{["per 1,000","Minimum","Refill"].map((label, i) => <tr className="border-t" key={label}><th scope="row">{t(label)}</th>
+            {comparison.map(item => <td className="break-words p-2" key={item.id}>{[formatUsd(item.price, 4), item.min_quantity.toLocaleString(), t(refillTerms(item.meta,item.name,item.description ?? "").short)][i]}</td>)}</tr>)}</tbody></table>
+      </section>}
       {/* Service list */}
       {platform !== "all" && !category && activeCategories.length === 0 ? (
         <div className="rounded-xl border border-dashed p-10 text-center">
@@ -456,6 +495,7 @@ export function ServicesBrowser() {
             const servicePlatform = detectPlatform(service.categories?.name, service.categories?.slug);
             return (
               <motion.div
+                id={"service-" + service.id}
                 key={service.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -500,10 +540,15 @@ export function ServicesBrowser() {
                   <span className="ml-1 text-xs font-medium text-muted-foreground">{t("per 1,000")}</span>
                 </p>
                 <p className="mb-4 mt-1 text-sm text-muted-foreground">
-                  {t("Minimum")} {service.min_quantity.toLocaleString()} · {t("Refill")}: {t(refillTerms(service.meta, service.name, service.description ?? "").label)}
-                </p>
+                  {t("Minimum")} {service.min_quantity.toLocaleString()}</p>
+                <details className="mb-3 text-xs"><summary className="cursor-pointer font-semibold text-primary">{t("Refill")} · {t(refillTerms(service.meta, service.name, service.description ?? "").short)}</summary>
+                  <p className="mt-1">{t(refillTerms(service.meta, service.name, service.description ?? "").label)}</p></details>
+
                 <div className="mt-auto flex items-center justify-between gap-2 border-t pt-3">
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">{service.average_time && <><Clock className="h-3 w-3" />{service.average_time}</>}</span>
+                  <Button size="sm" variant="ghost" aria-pressed={comparison.some(s => s.id === service.id)}
+                    disabled={comparison.length === 2 && !comparison.some(s => s.id === service.id)}
+                    onClick={() => setComparison(items => items.some(s => s.id === service.id) ? items.filter(s => s.id !== service.id) : [...items,service].slice(0,2))}>
+                    {t(comparison.some(s => s.id === service.id) ? "Remove" : "Compare")}</Button>
                   <Button
                     size="sm"
                     variant={isSelected ? "gradient" : "outline"}

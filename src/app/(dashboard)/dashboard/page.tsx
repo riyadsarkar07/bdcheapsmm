@@ -26,7 +26,7 @@ import {
   Headphones,
   Megaphone,
 } from "lucide-react";
-import { formatCurrency, formatDateTime, truncate } from "@/lib/utils";
+import { formatUsd, formatCurrency, formatDateTime, truncate } from "@/lib/utils";
 import type { OrderStatus, TransactionType } from "@/lib/types/database";
 
 export const revalidate = 0;
@@ -71,6 +71,7 @@ export default async function DashboardPage() {
     walletActivityRes,
     noticesRes,
     activeOrdersRes,
+    favoritesRes,
   ] = await Promise.all([
     supabase.from("orders").select("id", { count: "exact", head: true }).eq("user_id", user.id),
     supabase.from("orders").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", startOfToday),
@@ -105,6 +106,7 @@ export default async function DashboardPage() {
       .limit(3),
     supabase.from("orders").select("id,order_number,status,provider_order_id,provider_status:provider_response->>status,checked_at:provider_response->>panel_checked_at,services(name)")
       .eq("user_id", user.id).in("status", ["pending","processing","in_progress"]).order("created_at", { ascending: false }).limit(8),
+    supabase.from("favorites").select("services!inner(id,name,price)").eq("user_id", user.id).eq("services.is_active", true).order("created_at", {ascending:false}).limit(3),
   ]);
 
   // Surface failures server-side without breaking the whole page.
@@ -181,6 +183,12 @@ export default async function DashboardPage() {
         </div>
         <Button asChild className="bg-[#6d28d9] text-white hover:bg-[#5b21b6]"><Link href="/services"><Layers /><CustomerText value="New Order" /></Link></Button>
       </section>
+      {!!favoritesRes.data?.length && <section className="glass-card my-4 p-4">
+        <h2 className="mb-2 font-semibold"><CustomerText value="Favorite services" /></h2>
+        {favoritesRes.data.map(({ services: service }) => service && <div key={service.id} className="flex items-center justify-between gap-3 border-t py-3">
+          <div className="min-w-0"><p className="break-words text-sm font-medium">{service.name}</p><p className="text-xs text-muted-foreground">{formatUsd(service.price,4)} <CustomerText value="per 1,000" /></p></div>
+          <Button asChild size="sm" variant="outline"><Link href={`/services/${service.id}`}><CustomerText value="Order" /></Link></Button></div>)}
+      </section>}
       <section className="glass-card rounded-xl p-4">
         <div className="mb-2 flex items-center justify-between"><h2 className="font-semibold"><CustomerText value="My active orders" /></h2>
           <Link className="text-sm text-primary" href="/orders"><CustomerText value="View all orders" /></Link></div>

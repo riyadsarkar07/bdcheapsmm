@@ -263,11 +263,12 @@ export function OrderDetailClient({
           </CardHeader>
           <CardContent className="space-y-2.5">
             {isOwner && <>
+              {canRefill && <Button asChild variant="outline" className="w-full"><Link href={`/support/new?order=${order.id}&drop=1`}>{t("Report follower drop")}</Link></Button>}
               {order.service_id && !canCancel && <Button asChild variant="gradient" className="w-full"><Link href={`/services/${order.service_id}?repeat=${order.id}`}>{t("Order again")}</Link></Button>}
               <Button asChild variant={canCancel ? "gradient" : "outline"} className="w-full"><Link href={`/support/new?order=${order.id}`}>{t("Get order support")}</Link></Button>
             </>}
-            {canRefill && !refillDisabled && order.provider_order_id && (order.refill_count ?? 0) < 2 && <Button
-              variant="outline" className="w-full" disabled={action !== null} onClick={() => runAction("refill", () => refillOrderAction(order.id))}>
+            {canRefill && (!refillDisabled || isAdmin) && order.provider_order_id && (order.refill_count ?? 0) < 2 && <Button
+              variant="outline" className="w-full" disabled={action !== null} onClick={() => runAction("refill", () => refillOrderAction(order.id, isAdmin && refillDisabled))}>
               <RotateCcw />{t("Request refill")}
             </Button>}
             {canRefill && <p className="text-xs text-muted-foreground">{t("Refill:")} {t(refillLabel)}</p>}

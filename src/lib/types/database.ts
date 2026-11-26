@@ -540,6 +540,12 @@ export type Database = {
           }
         ];
       };
+      order_drop_reports: {
+        Row: { ticket_id:string; order_id:string; user_id:string; request_id:string; current_count:number|null; screenshot_path:string|null; created_at:string };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       tickets: {
         Row: Ticket;
         Insert: Partial<Ticket>;
@@ -868,6 +874,10 @@ export type Database = {
           p_cost: number;
         };
         Returns: Order;
+      };
+      create_drop_report: {
+        Args: { p_order:string; p_request:string; p_count:number|null; p_path:string|null };
+        Returns: string;
       };
       create_ticket_with_message: {
         Args: {

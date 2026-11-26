@@ -1,4 +1,26 @@
 const bangla: Record<string, string> = {
+  "Compare": "তুলনা করুন",
+  "Remove": "সরান",
+  "Compare services": "সার্ভিসের তুলনা",
+  "Select a second service": "আরেকটি সার্ভিস বেছে নিন",
+  "No automatic refill": "স্বয়ংক্রিয় রিফিল বন্ধ",
+  "Available": "রিফিল আছে",
+  "Unconfirmed": "এখনও নিশ্চিত হয়নি",
+  "Provider enables refill despite the service name": "নামে রিফিল নেই লেখা থাকলেও প্রোভাইডারের API-তে রিফিল চালু আছে।",
+  "Order timeline": "অর্ডারের ঘটনাক্রম",
+  "Order placed": "অর্ডার করা হয়েছে",
+  "Favorite services": "পছন্দের সার্ভিস",
+  "Provider acknowledged order": "প্রোভাইডার অর্ডার গ্রহণ করেছে",
+  "Admin requested a provider refill.": "অ্যাডমিন প্রোভাইডারকে রিফিলের অনুরোধ পাঠিয়েছেন।",
+  "Report follower drop": "ফলোয়ার কমার রিপোর্ট করুন",
+  "Follower drop reported": "ফলোয়ার কমার রিপোর্ট জমা হয়েছে",
+  "Current follower count": "বর্তমান ফলোয়ার সংখ্যা",
+  "Screenshot": "স্ক্রিনশট",
+  "View screenshot": "স্ক্রিনশট দেখুন",
+  "Add a count or screenshot": "ফলোয়ার সংখ্যা অথবা স্ক্রিনশট দিন",
+  "Use JPG, PNG or WebP up to 5 MB": "সর্বোচ্চ ৫ এমবি JPG, PNG বা WebP দিন",
+  "Submit report": "রিপোর্ট পাঠান",
+  "Could not submit report": "রিপোর্ট পাঠানো যায়নি",
   "Service ID": "সার্ভিস আইডি",
   "Paste your target link": "টার্গেট লিংক পেস্ট করুন",
   "Home": "হোম",
@@ -211,6 +233,8 @@ export function customerText(language: string, text: string) {
   if (text.startsWith("Welcome back, ")) return "স্বাগতম, " + text.slice(14);
   const delivery = text.match(/^(\d+) of (\d+) delivered$/);
   if (delivery) return delivery[2] + "টির মধ্যে " + delivery[1] + "টি ডেলিভার হয়েছে";
+  const unconfirmed = text.match(/^Listed as (\d+) days · provider has not confirmed$/);
+  if (unconfirmed) return "সার্ভিসে " + unconfirmed[1] + " দিন লেখা আছে · প্রোভাইডার নিশ্চিত করেনি";
   const listedDays = text.match(/^Listed as (\d+) days · automatic refill unavailable$/);
   if (listedDays) return "সার্ভিসে " + listedDays[1] + " দিন লেখা আছে · স্বয়ংক্রিয় রিফিল বন্ধ";
   const days = text.match(/^(\d+) days$/);

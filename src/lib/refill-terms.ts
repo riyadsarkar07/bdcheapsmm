@@ -13,9 +13,13 @@ export function refillTerms(meta: unknown, name = "", description = "") {
   const codedDays = name.match(/(?:^|[|•])\s*R([1-9]\d{0,3})\s*(?=$|[|•])/i)?.[1];
   const days = text.match(/\b(\d+)\s*[- ]?days?\s+refill\b/i)?.[1]
     ?? text.match(/\brefill\s*[:(-]?\s*(\d+)\s*[- ]?days?\b/i)?.[1] ?? codedDays;
-  const disabled = flag === false || (flag === null && /\b(?:no|without)\s+refill\b/i.test(text));
-  const supported = flag === true || !!days;
-  if (disabled && days) return { disabled, label: `Listed as ${days} days · automatic refill unavailable` };
-  const label = disabled ? "Listed without automatic refill" : days ? days + " days" : supported ? "Available · period not specified" : "Provider has not specified refill terms";
-  return { disabled, label };
+  const advertisedNo = /\b(?:no|without)\s+refill\b/i.test(text) || /(?:^|[|•])\s*NR\s*(?=$|[|•])/i.test(name);
+  const disabled = flag === false || (flag === null && advertisedNo);
+  const short = disabled ? "No automatic refill" : flag === true ? (days ? days + " days" : "Available") : "Unconfirmed";
+  const label = disabled && days ? `Listed as ${days} days · automatic refill unavailable`
+    : flag === true && advertisedNo ? "Provider enables refill despite the service name"
+    : flag === null && days && !disabled ? `Listed as ${days} days · provider has not confirmed`
+    : disabled ? "Listed without automatic refill" : days ? days + " days"
+    : flag === true ? "Available · period not specified" : "Provider has not specified refill terms";
+  return { disabled, label, short };
 }
