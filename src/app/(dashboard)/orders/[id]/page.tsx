@@ -1,3 +1,4 @@
+import {saveOrderNote} from "@/lib/actions/customer-tools";
 import { CustomerText } from "@/components/customer-language";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -46,12 +47,14 @@ export default async function OrderDetailPage({
     : { data: null };
 
   const terms = refillTerms(order.services?.meta, order.services?.name, order.services?.description ?? "");
-  const [events, credits, reports] = await Promise.all([
+  const [events, credits, reports,note,debits] = await Promise.all([
     createAdminClient().from("logs").select("id,created_at,description,action,submitted:meta->>provider_submitted,reference:meta->>provider_order_id").eq("entity_type", "orders")
       .eq("entity_id", id).in("action", ["order_create","order_refill", "order_cancel"]).order("created_at"),
     supabase.from("transactions").select("id,created_at,amount,currency").eq("user_id", order.user_id)
       .eq("reference_id", id).eq("reference_type", "orders").eq("type", "refund"),
     supabase.from("order_drop_reports").select("ticket_id,created_at").eq("order_id",id),
+    supabase.from("order_notes").select("note").eq("order_id",id).maybeSingle(),
+    supabase.from("transactions").select("amount,currency").eq("user_id",order.user_id).eq("reference_type","orders").eq("reference_id",id).eq("type","order_deduction"),
   ]);
   const snapshot = order.provider_response && typeof order.provider_response === "object" && !Array.isArray(order.provider_response) ? order.provider_response : {};
   const history = [
@@ -85,6 +88,8 @@ export default async function OrderDetailPage({
         isAdmin={isAdmin}
         profit={profit}
       />
+      {order.user_id===user.id&&<form className="glass-card mt-4 flex flex-wrap gap-3 p-4" action={saveOrderNote.bind(null,id)}><label className="grow"><CustomerText value="Private project note"/><input className="block w-full rounded border bg-background p-2" name="note" defaultValue={note.data?.note||""} maxLength={160}/></label><Button><CustomerText value="Save"/></Button></form>}
+      {!!credits.data?.length&&<section className="glass-card my-4 p-4"><h2><CustomerText value="Refund breakdown"/></h2>{debits.data?.map((r,i)=><p key={i}><CustomerText value="Wallet charge"/> · {formatCurrency(Math.abs(r.amount),r.currency)}</p>)}{credits.data.map(r=><p key={r.id}><CustomerText value="Refunded"/> · {formatCurrency(r.amount,r.currency)} · {new Date(r.created_at).toLocaleString("en-GB",{timeZone:"Asia/Dhaka"})}</p>)}<Link className="underline" href={"/transactions?order="+id}><CustomerText value="Wallet activity"/></Link></section>}
       <section className="mt-5 space-y-3 rounded-xl border bg-card p-5">
         <h2 className="font-semibold"><CustomerText value="Order timeline" /></h2>
         {history.map(event => <div key={event.id} className="text-sm"><time className="text-muted-foreground">{new Date(event.created_at).toLocaleString("en-GB", { timeZone: "Asia/Dhaka" })} (Dhaka)</time> · {"provider" in event && <><CustomerText value="Provider status" /> · </>}{event.href ? <Link className="text-primary underline" href={event.href}><CustomerText value={event.text} /></Link> : <CustomerText value={event.text} />}</div>)}

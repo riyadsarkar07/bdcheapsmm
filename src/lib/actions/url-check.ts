@@ -17,8 +17,12 @@ function normalizeUrl(raw: string): { host: string; path: string; href: string }
   try {
     const url = new URL(raw.trim());
     const host = url.hostname.replace(/^www\./i, "").toLowerCase();
-    const path = (url.pathname.replace(/\/+$/, "") || "/").toLowerCase();
-    return { host, path, href: `${url.protocol}//${host}${path}${url.search}` };
+    const path = url.pathname.replace(/\/+$/, "") || "/";
+    for (const key of Array.from(url.searchParams.keys())) {
+      if (/^(utm_|fbclid$|igsh$)/i.test(key)) url.searchParams.delete(key);
+    }
+    url.searchParams.sort();
+    return { host, path, href: `${host}${path}${url.search}` };
   } catch {
     return null;
   }
@@ -36,27 +40,21 @@ export async function checkUrlConflictAction(input: {
 
   const { createClient } = await import("@/lib/supabase/server");
   const supabase = await createClient();
-  const { data: orders } = await supabase
-    .from("orders")
-    .select("id, order_number, status, quantity, created_at, link, service_id, services(name)")
-    .eq("user_id", user.id)
-    .in("status", [...ACTIVE_STATUSES])
-    .limit(80);
-
-  const conflicts: UrlConflict[] = (orders ?? [])
-    .filter((order) => {
-      const other = normalizeUrl(order.link);
-      if (!other) return order.link.trim() === input.link.trim();
-      return other.host === parsed.host && other.path === parsed.path;
-    })
-    .map((order) => ({
-      orderId: order.id,
-      orderNumber: order.order_number,
-      status: order.status,
-      quantity: order.quantity,
-      serviceName: order.services?.name ?? null,
-      createdAt: order.created_at,
-    }));
-
+  const conflicts: UrlConflict[] = [];
+  for (let offset = 0; ; offset += 200) {
+    let query = supabase.from("orders")
+      .select("id,order_number,status,quantity,created_at,link,services(name)")
+      .eq("user_id", user.id).in("status", [...ACTIVE_STATUSES]);
+    if (input.serviceId) query = query.eq("service_id", input.serviceId);
+    const {data,error} = await query.order("id").range(offset, offset+199);
+    if (error) return fail("Could not check active orders");
+    for (const order of data) {
+      if (normalizeUrl(order.link)?.href === parsed.href) {
+        conflicts.push({orderId:order.id,orderNumber:order.order_number,status:order.status,
+          quantity:order.quantity,serviceName:order.services?.name ?? null,createdAt:order.created_at});
+      }
+    }
+    if (data.length < 200 || conflicts.length >= 10) break;
+  }
   return ok({ conflicts });
 }

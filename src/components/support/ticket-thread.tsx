@@ -1,5 +1,6 @@
 "use client";
 
+import {useCustomerText} from "@/components/customer-language";
 import * as React from "react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -37,6 +38,7 @@ export function TicketThread({
   ticket: Ticket;
   isAdmin: boolean;
 }) {
+  const t=useCustomerText();
   const supabase = createClient();
   const [messages, setMessages] = React.useState<MessageWithUser[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -145,11 +147,11 @@ export function TicketThread({
           <Button variant="outline" size="sm" onClick={toggleClose}>
             {status === "closed" ? (
               <>
-                <Unlock /> Reopen
+                <Unlock /> {t("Reopen")}
               </>
             ) : (
               <>
-                <Lock /> Close Ticket
+                <Lock /> {t("Close Ticket")}
               </>
             )}
           </Button>
@@ -163,7 +165,7 @@ export function TicketThread({
           </div>
         ) : messages.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
-            No messages yet.
+            {t("No messages yet.")}
           </p>
         ) : (
           messages.map((msg) => {
@@ -227,7 +229,7 @@ export function TicketThread({
       {status !== "closed" ? (
         <div className="glass-card rounded-xl p-4">
           <Textarea
-            placeholder="Type your reply..."
+            placeholder={t("Type your reply...")}
             rows={4}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
@@ -238,13 +240,13 @@ export function TicketThread({
             </p>
             <Button onClick={sendReply} disabled={sending || !message.trim()}>
               {sending ? <Loader2 className="animate-spin" /> : <Send />}
-              Send Reply
+              {t("Send Reply")}
             </Button>
           </div>
         </div>
       ) : (
         <p className="rounded-xl border p-4 text-center text-sm text-muted-foreground">
-          This ticket is closed.
+          {t("This ticket is closed.")}
         </p>
       )}
     </motion.div>

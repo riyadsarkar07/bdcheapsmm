@@ -79,7 +79,7 @@
     --card: 0 0% 100%;
     --card-foreground: var(--foreground);
     --border: 250 23% 88%;
-    --muted-foreground: 250 11% 39%;
+    --muted-foreground: 250 13% 34%;
     --primary: 263 70% 50%;
     --primary-foreground: 0 0% 100%;
     --accent: 259 100% 96%;
@@ -96,7 +96,7 @@
     --foreground: 252 40% 95%;
     --card: 249 20% 13%;
     --border: 249 16% 26%;
-    --muted-foreground: 250 17% 73%;
+    --muted-foreground: 250 17% 78%;
     --primary: 258 100% 80%;
     --primary-foreground: 253 40% 14%;
     --accent: 258 32% 22%;

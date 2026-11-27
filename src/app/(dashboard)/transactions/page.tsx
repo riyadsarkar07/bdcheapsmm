@@ -1,3 +1,4 @@
+import {detectPlatform,PLATFORM_LABELS} from "@/lib/pricing";
 import Link from "next/link";
 import { CustomerText } from "@/components/customer-language";
 import { createClient } from "@/lib/supabase/server";
@@ -13,18 +14,17 @@ import type { TransactionType } from "@/lib/types/database";
 
 export const revalidate = 0;
 
-export default async function TransactionsPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+export default async function TransactionsPage({ searchParams }: { searchParams: Promise<{ page?: string;order?:string }> }) {
   const { user, error } = await requireUser();
   if (error || !user) return null;
 
+  const order=(await searchParams).order;
   const requested = Number((await searchParams).page);
   const page = Number.isSafeInteger(requested) && requested > 0 ? requested : 1;
   const size = 50;
   const supabase = await createClient();
   const [{ data: rows, error: ledgerError }, { data: approvedDeposits }, { data: totals }] = await Promise.all([
-    supabase
-      .from("transactions")
-      .select("*")
+    (order?supabase.from("transactions").select("*").eq("reference_type","orders").eq("reference_id",order):supabase.from("transactions").select("*"))
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .order("id").range((page - 1) * size, page * size),
@@ -36,6 +36,13 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
     supabase.from("transactions").select("type,amount").eq("user_id", user.id).order("created_at", { ascending: false }).limit(200),
   ]);
 
+  const monthly=await supabase.rpc("customer_spending",{});
+  const groups=new Map<string,{platform:string;currency:string;spent:number;refunded:number}>();
+  for(const row of monthly.data||[]){
+    const platform=PLATFORM_LABELS[detectPlatform(row.category_name)]||"Other", key=platform+row.currency;
+    const item=groups.get(key)||{platform,currency:row.currency,spent:0,refunded:0};
+    item.spent+=Number(row.spent);item.refunded+=Number(row.refunded);groups.set(key,item);
+  }
   const transactions = rows?.slice(0, size);
   const approvedDepositIds = new Set((approvedDeposits ?? []).map((p) => p.id));
 
@@ -80,6 +87,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
         ))}
       </div>
 
+      <details className="glass-card mb-4 p-4"><summary><CustomerText value="This month by platform"/></summary>{monthly.error?<p>Could not load statement.</p>:!groups.size?<CustomerText value="No wallet activity yet."/>:Array.from(groups.values()).map(r=><p key={r.platform+r.currency}>{r.platform} · <CustomerText value="Spent"/> {formatCurrency(r.spent,r.currency)} · <CustomerText value="Refunded"/> {formatCurrency(r.refunded,r.currency)}</p>)}</details>
       {ledgerError ? <p role="alert">Could not load transactions.</p> : (transactions ?? []).length === 0 ? (
         <EmptyState
           icon={History}
@@ -118,7 +126,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right text-muted-foreground tabular-nums">
-                        {tx.balance_after != null ? formatCurrency(tx.balance_after, tx.currency) : "—"}
+                        {tx.balance_after != null ? formatCurrency(tx.balance_after-tx.amount,tx.currency)+" → "+formatCurrency(tx.balance_after, tx.currency) : "—"}
                       </td>
                       <td className="px-4 py-3 text-right text-muted-foreground">{formatDateTime(tx.created_at)}</td>
                       <td className="px-4 py-3 text-right">
@@ -166,7 +174,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
                       </p>
                       {tx.balance_after != null ? (
                         <p className="text-[11px] text-muted-foreground tabular-nums">
-                          Bal: {formatCurrency(tx.balance_after, tx.currency)}
+                          {formatCurrency(tx.balance_after-tx.amount,tx.currency)} → {formatCurrency(tx.balance_after,tx.currency)}
                         </p>
                       ) : null}
                       {tx.type === "deposit" &&

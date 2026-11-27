@@ -31,11 +31,12 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { createOrderAction, quoteCouponAction } from "@/lib/actions/orders";
+import { createOrderAction,lookupCheckout,quoteCouponAction } from "@/lib/actions/orders";
 import { checkUrlConflictAction, type UrlConflict } from "@/lib/actions/url-check";
 import { formatUsd, formatCurrency } from "@/lib/utils";
 import { computeOrderCharge, walletCharge, hasSufficientBalance } from "@/lib/pricing";
-import { useQueryClient } from "@tanstack/react-query";
+import { createClient } from "@/lib/supabase/client";
+import { useQuery,useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -62,6 +63,7 @@ const formSchema = z.object({
 });
 
 interface OrderFormProps {
+  userId:string; serviceType:string|null;
   serviceId: string;
   serviceName: string;
   providerServiceId: string | number | null;
@@ -79,7 +81,7 @@ interface OrderFormProps {
   averageTime?: string | null;
 }
 
-export function OrderForm({
+export function OrderForm({userId,serviceType,
   serviceId,
   serviceName,
   providerServiceId,
@@ -95,6 +97,7 @@ export function OrderForm({
   averageTime,
 }: OrderFormProps) {
   const t = useCustomerText();
+  const {data:incident}=useQuery({queryKey:["service-incident",serviceId],staleTime:300000,queryFn:async()=>(await createClient().rpc("service_incident",{p_service:serviceId})).data});
   const formId = React.useId();
   const formNode = React.useRef<HTMLFormElement>(null);
   const [formVisible, setFormVisible] = React.useState(false);
@@ -121,13 +124,42 @@ export function OrderForm({
       if (values.quantity < minQuantity || values.quantity > maxQuantity) {
         ctx.addIssue({ code: "custom", path: ["quantity"], message: t("Quantity range") + ": " + minQuantity + " – " + maxQuantity });
       }
-      const message = targetLinkError(values.link, platform);
+      const message = targetLinkError(values.link,platform,serviceType);
       if (message) ctx.addIssue({ code: "custom", path: ["link"], message: t(message) });
     })),
     mode: "onBlur",
     defaultValues: { quantity: Math.max(minQuantity, Math.min(maxQuantity, previous?.quantity ?? suggested)), link: previous?.link ?? "", coupon: "" },
   });
 
+  const storageKey="checkout:"+userId+":"+serviceId;
+  const [name,setName]=React.useState(""),[editing,setEditing]=React.useState(false);
+  const [templates,setTemplates]=React.useState<{name:string;quantity:number;link:string}[]>([]);
+  const [retryCheck,checkAgain]=React.useState(0);
+  const [recovering,setRecovering]=React.useState(false);
+  React.useEffect(()=>{
+    if(!userId)return;
+    try{
+      const draft=JSON.parse(sessionStorage.getItem(storageKey)||"null");
+      if(draft&&!previous)form.reset(draft);
+      setTemplates(JSON.parse(localStorage.getItem(storageKey+":templates")||"[]"));
+    }catch{}
+    const sub=form.watch(v=>{try{sessionStorage.setItem(storageKey,JSON.stringify(v));}catch{}});
+    return ()=>sub.unsubscribe();
+  },[form,userId,previous,storageKey]);
+  React.useEffect(()=>{
+    let active=true;
+    async function recover(){
+      const saved=sessionStorage.getItem(storageKey+":attempt");
+      if(!saved)return;
+      setRecovering(true);
+      try{
+        const {key,signature}=JSON.parse(saved),[link,qty,coupon]=JSON.parse(signature);
+        const id=await lookupCheckout(key,serviceId,qty,link,coupon);
+        if(id&&active){sessionStorage.removeItem(storageKey+":attempt");sessionStorage.removeItem(storageKey);router.replace("/orders/"+id);}
+      }catch{}finally{if(active)setRecovering(false);}
+    }
+    void recover();return()=>{active=false;};
+  },[serviceId,storageKey,router,retryCheck]);
   const quantity = form.watch("quantity") || 0;
   // pricePerUnit is per 1000 units, so the total is (price/1000) x quantity.
   const coupon = form.watch("coupon")?.trim() || "";
@@ -136,16 +168,21 @@ export function OrderForm({
   const needsQuote = !!coupon && !applied;
   const usd = applied ? quote.price : computeOrderCharge(pricePerUnit, quantity);
   const total = walletCharge(usd, currency);
-  async function applyCoupon() {
-    setLoading(true);
-    try {
-      const result = await quoteCouponAction(serviceId, quantity, coupon);
-      if (result.success && result.data != null) setQuote({ key: quoteKey, price: result.data });
-      else toast.error(result.error ?? "Coupon unavailable");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const [couponError,setCouponError] = React.useState("");
+  React.useEffect(() => {
+    let active=true;
+    setCouponError("");
+    if (!coupon || quantity<minQuantity || quantity>maxQuantity) return;
+    const timer=setTimeout(async()=>{
+      try {
+        const result=await quoteCouponAction(serviceId,quantity,coupon);
+        if(!active)return;
+        if(result.success && result.data!=null)setQuote({key:quoteKey,price:result.data});
+        else setCouponError(result.error || "Coupon unavailable");
+      } catch {if(active)setCouponError("Coupon unavailable");}
+    },650);
+    return ()=>{active=false;clearTimeout(timer);};
+  },[serviceId,coupon,quantity,quoteKey,minQuantity,maxQuantity]);
   const balanceAfter = Math.max(0, Number(balance) - total);
 
   const presets = React.useMemo(() => {
@@ -162,7 +199,11 @@ export function OrderForm({
     submittingRef.current = true;
     setLoading(true);
     try {
-      const result = await createOrderAction({
+      const signature=JSON.stringify([values.link,Number(values.quantity),values.coupon||""]);
+      const last=JSON.parse(sessionStorage.getItem(storageKey+":attempt")||"null");
+      const key=last?.signature===signature?last.key:crypto.randomUUID();
+      sessionStorage.setItem(storageKey+":attempt",JSON.stringify({key,signature}));
+      const result = await createOrderAction({requestId:key,
         serviceId,
         quantity: values.quantity,
         link: values.link,
@@ -170,9 +211,10 @@ export function OrderForm({
         expectedUsd: usd,
       });
       if (result.success && result.data) {
-        toast.success(`Order ${result.data.orderNumber} placed successfully!`);
+        toast.success(t("Order recorded")+" #"+result.data.orderNumber);
         setQuote(null);
         form.setValue("coupon", "");
+        sessionStorage.removeItem(storageKey);sessionStorage.removeItem(storageKey+":attempt");
         setConflicts(null);
         setPendingValues(null);
         setConfirmValues(null);
@@ -183,6 +225,7 @@ export function OrderForm({
         setQuote(null);
         toast.error(result.error ?? "Failed to place order");
       }
+    } catch {checkAgain(v=>v+1);toast.error(t("Connection interrupted. Retry to check the result."));
     } finally {
       submittingRef.current = false;
       setLoading(false);
@@ -195,6 +238,7 @@ export function OrderForm({
     setLoading(true);
     try {
       const check = await checkUrlConflictAction({ link: values.link, serviceId });
+      if(!check.success){toast.error(t("Could not check active orders"));return;}
       const found = check.success ? (check.data?.conflicts ?? []) : [];
       if (found.length > 0) {
         setPendingValues(values);
@@ -212,7 +256,7 @@ export function OrderForm({
   const canIncrease = !applied && pricePerUnit > 0 && quantity < firstBillableQuantity && firstBillableQuantity <= maxQuantity;
 
   const reviewLabel = t(needsQuote ? "Apply coupon to review" : !chargeable ? "Review pricing" : insufficient ? "Insufficient Balance" : "Review Order");
-  const reviewDisabled = loading || !chargeable || insufficient || needsQuote;
+  const reviewDisabled = recovering || loading || !chargeable || insufficient || needsQuote;
 
   function adjustQuantity(delta: number) {
     const current = Number(form.getValues("quantity")) || minQuantity;
@@ -239,8 +283,15 @@ export function OrderForm({
       {previous && previous.quantity !== form.formState.defaultValues?.quantity && (
         <p className="mb-3 text-sm text-muted-foreground"><CustomerText value="The service limits changed. Check the adjusted quantity before placing this order." /></p>
       )}
+      {incident&&<p role="status" className="mb-3 rounded border p-3">{t(incident)}</p>}
+      <details className="mb-3 rounded border p-3 text-sm"><summary>{t("Order templates")}</summary>
+        <Input aria-label={t("Template name")} placeholder={t("Template name")} value={name} maxLength={60} onChange={e=>setName(e.target.value)}/>
+        <Button type="button" variant="outline" disabled={!name.trim()||!form.watch("link")} onClick={()=>{
+          const next=[{name:name.trim(),quantity:Number(form.getValues("quantity")),link:form.getValues("link")},...templates.filter(v=>v.name!==name.trim())].slice(0,20);
+          localStorage.setItem(storageKey+":templates",JSON.stringify(next));setTemplates(next);setName("");
+        }}>{t("Save template")}</Button>{templates.map(v=><Button type="button" variant="ghost" key={v.name} onClick={()=>form.reset({link:v.link,quantity:v.quantity,coupon:""})}>{v.name}</Button>)}</details>
       <Form {...form}>
-        <form noValidate id={formId} ref={formNode} onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <form onFocusCapture={e=>setEditing(e.target instanceof HTMLInputElement)} onBlurCapture={()=>setEditing(false)} noValidate id={formId} ref={formNode} onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <FormField
             control={form.control}
             name="quantity"
@@ -318,6 +369,8 @@ export function OrderForm({
             <div className="flex justify-between gap-3"><span className="text-muted-foreground">{t("Refill")}</span><span className="text-right">{t(refillLabel)}</span></div>
             {applied && <div className="mt-1.5 flex justify-between text-sm text-success"><span><CustomerText value="Coupon discount" /></span><span>−{formatCurrency(walletCharge(computeOrderCharge(pricePerUnit, quantity), currency) - total, currency)}</span></div>}
             {averageTime && <div className="flex justify-between gap-3"><span className="text-muted-foreground">{t("Est. delivery")}</span><span>{averageTime}</span></div>}
+            <p className="text-xs">{t("Before rounding")} · {formatUsd(pricePerUnit*quantity/1000,6)}</p>
+            <p className="text-xs">{formatUsd(usd)} · {formatCurrency(walletCharge(usd,"BDT"),"BDT")}</p>
             <div className="mt-2.5 flex items-center justify-between border-t pt-2.5">
               <span className="font-medium"><CustomerText value="Wallet charge" /></span>
               <span className="text-xl font-bold text-primary tabular-nums">
@@ -358,8 +411,8 @@ export function OrderForm({
                 </div>
               </div>
               <Button asChild variant="gradient" size="sm" className="w-full">
-                <a href="/add-funds">
-                  <Wallet /> <CustomerText value="Add Funds" />
+                <a href={"/add-funds?bdt="+Math.ceil((total-balance)*(currency==="USD"?126:1))}>
+                  <Wallet /> <CustomerText value="Add Funds" /> · {formatCurrency(total-balance,currency)}
                 </a>
               </Button>
             </div>
@@ -412,16 +465,14 @@ export function OrderForm({
                     </div>
                   </FormControl>
                   {coupon && (
-                    <Button type="button" size="sm" variant="outline" disabled={loading || applied} onClick={applyCoupon}>
-                      {t(applied ? "Coupon applied" : "Apply coupon")}
-                    </Button>
+                    <p role="status" className="text-sm">{t(applied?"Coupon applied":couponError||"Checking coupon")} · {serviceName}</p>
                   )}
                   <FormMessage />
                 </FormItem>
               )}
             />
           </details>
-          <Button type="submit" variant="gradient" className={formVisible ? "hidden w-full lg:inline-flex" : "w-full"} disabled={reviewDisabled}>
+          <Button type="submit" variant="gradient" className={formVisible && !editing ? "hidden w-full lg:inline-flex" : "w-full"} disabled={reviewDisabled}>
             {loading ? <Loader2 className="animate-spin" /> : <Zap />}
             {reviewLabel}
           </Button>
@@ -429,7 +480,7 @@ export function OrderForm({
         </form>
       </Form>
 
-      {formVisible && !confirmValues && !conflicts && createPortal(
+      {formVisible && !editing && !confirmValues && !conflicts && createPortal(
         <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-3 border-t bg-background px-4 py-2 shadow-sm lg:hidden">
           <div className="shrink-0"><p className="text-xs text-muted-foreground">{t("Total charge")}</p>
             <p className="font-semibold tabular-nums">{Number.isFinite(total) ? formatCurrency(total, currency) : t("Unavailable")}</p></div>
@@ -451,7 +502,7 @@ export function OrderForm({
             {(conflicts ?? []).map((c) => (
               <div key={c.orderId} className="rounded-lg border p-3 text-sm">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="font-medium">#{c.orderNumber}</p>
+                  <a className="text-primary underline" href={"/orders/"+c.orderId}>#{c.orderNumber}</a>
                   <Badge variant="warning">{c.status}</Badge>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -538,7 +589,7 @@ export function OrderForm({
               onClick={() => confirmValues && placeOrder(confirmValues)}
             >
               {loading ? <Loader2 className="animate-spin" /> : <Zap />}
-              <CustomerText value="Confirm & Place Order" />
+              <CustomerText value="Confirm & Place Order" /> · {formatCurrency(total,currency)}
             </Button>
           </DialogFooter>
         </DialogContent>

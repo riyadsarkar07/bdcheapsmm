@@ -1,5 +1,6 @@
 "use client";
 
+import {useCustomerText} from "@/components/customer-language";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -57,12 +58,14 @@ const allMethods = [
 ];
 
 export function AddFundsForm({
-  payments,
+  payments, initialAmount,
   userId,
 }: {
+  initialAmount?:number;
   payments: PaymentSettings;
   userId: string;
 }) {
+  const t=useCustomerText();
   const router = useRouter();
   const [loading, setLoading] = React.useState(false);
   const [screenshot, setScreenshot] = React.useState<File | null>(null);
@@ -84,7 +87,7 @@ export function AddFundsForm({
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { method: defaultMethod, senderNumber: "", amount: undefined as unknown as number, transactionId: "", note: "" },
+    defaultValues: { method: defaultMethod, senderNumber: "", amount:initialAmount??(undefined as unknown as number), transactionId: "", note: "" },
   });
 
   const method = form.watch("method");
@@ -111,10 +114,10 @@ export function AddFundsForm({
         className="glass-card rounded-xl p-6"
       >
         <h2 className="mb-1 flex items-center gap-2 text-lg font-bold">
-          <Wallet className="h-5 w-5 text-primary" /> Make a Deposit
+          <Wallet className="h-5 w-5 text-primary" /> {t("Make a Deposit")}
         </h2>
         <p className="mb-5 text-sm text-muted-foreground">
-          Send money to the number below, then fill in the form with your details.
+          {t("Send money to the number below, then fill in the form with your details.")}
         </p>
         <div className="rounded-lg bg-muted/50 p-4 text-sm text-muted-foreground">
           No payment methods are currently available. Please contact support.
@@ -139,7 +142,7 @@ export function AddFundsForm({
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!screenshot) {
-      toast.error("Please upload a payment screenshot.");
+      toast.error(t("Please upload a payment screenshot."));
       return;
     }
     setLoading(true);
@@ -147,7 +150,7 @@ export function AddFundsForm({
       if (uploadedProof.current?.file !== screenshot) {
         const path = `${userId}/${crypto.randomUUID()}.${screenshot.type.split("/")[1]}`;
         const upload = await createClient().storage.from("payment-proofs").upload(path, screenshot);
-        if (upload.error) { toast.error("Screenshot upload failed. Please try again."); return; }
+        if (upload.error) { toast.error(t("Screenshot upload failed. Please try again.")); return; }
         uploadedProof.current = { file: screenshot, path };
       }
       const result = await submitPaymentAction({
@@ -159,7 +162,7 @@ export function AddFundsForm({
         screenshotPath: uploadedProof.current.path,
       });
       if (result.success) {
-        toast.success("Payment request submitted! Awaiting approval.");
+        toast.success(t("Payment request submitted! Awaiting approval."));
         form.reset({ method: defaultMethod, senderNumber: "", amount: undefined as unknown as number, transactionId: "", note: "" });
         setScreenshot(null);
         setPreview(null);
@@ -181,10 +184,10 @@ export function AddFundsForm({
       className="glass-card rounded-xl p-6"
     >
       <h2 className="mb-1 flex items-center gap-2 text-lg font-bold">
-        <Wallet className="h-5 w-5 text-primary" /> Make a Deposit
+        <Wallet className="h-5 w-5 text-primary" /> {t("Make a Deposit")}
       </h2>
       <p className="mb-5 text-sm text-muted-foreground">
-        Send money to the number below, then fill in the form with your details.
+        {t("Send money to the number below, then fill in the form with your details.")}
       </p>
 
       <Form {...form}>
@@ -194,7 +197,7 @@ export function AddFundsForm({
             name="method"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Payment Method</FormLabel>
+                <FormLabel>{t("Payment Method")}</FormLabel>
                 <FormControl>
                   <RadioGroup
                     onValueChange={field.onChange}
@@ -288,7 +291,7 @@ export function AddFundsForm({
             name="senderNumber"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Sender Number</FormLabel>
+                <FormLabel>{t("Sender Number")}</FormLabel>
                 <FormControl>
                   <div className="relative">
                     <Smartphone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -305,7 +308,7 @@ export function AddFundsForm({
             name="amount"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Amount (BDT)</FormLabel>
+                <FormLabel>{t("Amount (BDT) · minimum ৳1")}</FormLabel>
                 <FormControl>
                   <Input type="number" min={1} placeholder="500" {...field} />
                 </FormControl>
@@ -319,7 +322,7 @@ export function AddFundsForm({
             name="transactionId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Transaction ID</FormLabel>
+                <FormLabel>{t("Transaction ID")}</FormLabel>
                 <FormControl>
                   <div className="relative">
                     <Hash className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -336,7 +339,7 @@ export function AddFundsForm({
             name="note"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Note (optional)</FormLabel>
+                <FormLabel>{t("Note (optional)")}</FormLabel>
                 <FormControl>
                   <div className="relative">
                     <MessageSquare className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -350,7 +353,7 @@ export function AddFundsForm({
 
           {/* Screenshot */}
           <div>
-            <Label>Screenshot Proof</Label>
+            <Label>{t("Screenshot Proof")}</Label>
             <input
               ref={fileRef}
               type="file"
@@ -388,14 +391,14 @@ export function AddFundsForm({
                 className="mt-2 flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed p-6 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary"
               >
                 <ImagePlus className="h-6 w-6" />
-                Click to upload screenshot (PNG/JPG/WEBP, max 5MB)
+                {t("Click to upload screenshot (PNG/JPG/WEBP, max 5MB)")}
               </button>
             )}
           </div>
 
           <Button type="submit" variant="gradient" className="w-full" disabled={loading}>
             {loading ? <Loader2 className="animate-spin" /> : <Upload />}
-            Submit Payment Request
+            {t("Submit Payment Request")}
           </Button>
         </form>
       </Form>

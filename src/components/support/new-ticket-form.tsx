@@ -1,5 +1,6 @@
 "use client";
 
+import {useCustomerText} from "@/components/customer-language";
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -28,13 +29,14 @@ const formSchema = z.object({
   message: z.string().min(5, "Please describe your issue").max(5000),
 });
 
-export function NewTicketForm({ orderId, subject = "" }: { orderId?: string; subject?: string }) {
+export function NewTicketForm({ orderId, subject = "",category="",message="" }: { orderId?: string; subject?: string;category?:string;message?:string }) {
+  const t=useCustomerText();
   const router = useRouter();
   const [loading, setLoading] = React.useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { subject, category: orderId ? "Order" : "", priority: "normal", message: "" },
+    defaultValues: { subject, category: orderId ? "Order" : category, priority: "normal", message },
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -42,7 +44,7 @@ export function NewTicketForm({ orderId, subject = "" }: { orderId?: string; sub
     try {
       const result = await createTicketAction({ ...values, orderId });
       if (result.success && result.data) {
-        toast.success("Ticket created!");
+        toast.success(t("Ticket created!"));
         router.push(`/support/${result.data.ticketId}`);
       } else {
         toast.error(result.error ?? "Failed to create ticket");
@@ -64,9 +66,9 @@ export function NewTicketForm({ orderId, subject = "" }: { orderId?: string; sub
             <Headphones className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-xl font-bold">Open a Support Ticket</h1>
+            <h1 className="text-xl font-bold">{t("Open a Support Ticket")}</h1>
             <p className="text-sm text-muted-foreground">
-              We usually reply within a few hours.
+              {t("We usually reply within a few hours.")}
             </p>
           </div>
         </div>
@@ -78,7 +80,7 @@ export function NewTicketForm({ orderId, subject = "" }: { orderId?: string; sub
               name="subject"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Subject</FormLabel>
+                  <FormLabel>{t("Subject")}</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g. Order not delivered" {...field} />
                   </FormControl>
@@ -92,7 +94,7 @@ export function NewTicketForm({ orderId, subject = "" }: { orderId?: string; sub
                 name="category"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Category (optional)</FormLabel>
+                    <FormLabel>{t("Category (optional)")}</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. Payment, Order, Refund" {...field} />
                     </FormControl>
@@ -105,15 +107,15 @@ export function NewTicketForm({ orderId, subject = "" }: { orderId?: string; sub
                 name="priority"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Priority</FormLabel>
+                    <FormLabel>{t("Priority")}</FormLabel>
                     <FormControl>
                       <select
                         className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                         {...field}
                       >
-                        <option value="low">Low</option>
-                        <option value="normal">Normal</option>
-                        <option value="high">High</option>
+                        <option value="low">{t("Low")}</option>
+                        <option value="normal">{t("Normal")}</option>
+                        <option value="high">{t("High")}</option>
                       </select>
                     </FormControl>
                     <FormMessage />
@@ -126,7 +128,7 @@ export function NewTicketForm({ orderId, subject = "" }: { orderId?: string; sub
               name="message"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Message</FormLabel>
+                  <FormLabel>{t("Message")}</FormLabel>
                   <FormControl>
                     <Textarea
                       placeholder="Describe your issue in detail. Include order IDs if relevant."
@@ -140,7 +142,7 @@ export function NewTicketForm({ orderId, subject = "" }: { orderId?: string; sub
             />
             <Button type="submit" variant="gradient" disabled={loading}>
               {loading ? <Loader2 className="animate-spin" /> : <Send />}
-              Submit Ticket
+              {t("Submit Ticket")}
             </Button>
           </form>
         </Form>

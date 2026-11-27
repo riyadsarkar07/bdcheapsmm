@@ -11,7 +11,7 @@ import { Wallet, ArrowDownToLine } from "lucide-react";
 
 export const revalidate = 0;
 
-export default async function AddFundsPage() {
+export default async function AddFundsPage({searchParams}:{searchParams:Promise<{bdt?:string}>}) {
   const { user, error } = await requireUser();
   if (error || !user) return null;
 
@@ -27,6 +27,7 @@ export default async function AddFundsPage() {
       .limit(20),
   ]);
 
+  const requested=Number((await searchParams).bdt);
   const rows = await resolveScreenshotUrls(supabase, paymentRequestsRes.data ?? []);
   const pending = rows.filter((r) => r.status === "pending").length;
 
@@ -64,7 +65,7 @@ export default async function AddFundsPage() {
 
       <AddFundsInstructions />
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <AddFundsForm
+        <AddFundsForm initialAmount={requested>0&&requested<=100000?Math.max(1,Math.ceil(requested)):undefined}
           payments={settings.payments}
           userId={user.id}
         />

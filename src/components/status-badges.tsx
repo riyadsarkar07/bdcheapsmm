@@ -32,7 +32,7 @@ const paymentStatusMap: Record<PaymentStatus, { label: string; variant: "success
 
 export function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
   const config = paymentStatusMap[status];
-  return <Badge variant={config.variant}>{config.label}</Badge>;
+  return <Badge variant={config.variant}><CustomerText value={config.label}/></Badge>;
 }
 
 const ticketStatusMap: Record<TicketStatus, { label: string; variant: "success" | "warning" | "secondary" }> = {
@@ -43,7 +43,7 @@ const ticketStatusMap: Record<TicketStatus, { label: string; variant: "success" 
 
 export function TicketStatusBadge({ status }: { status: TicketStatus }) {
   const config = ticketStatusMap[status];
-  return <Badge variant={config.variant}>{config.label}</Badge>;
+  return <Badge variant={config.variant}><CustomerText value={config.label}/></Badge>;
 }
 
 const transactionTypeMap: Record<TransactionType, { label: string; variant: "success" | "destructive" | "info" | "secondary" }> = {

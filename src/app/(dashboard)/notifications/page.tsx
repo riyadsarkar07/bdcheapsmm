@@ -1,3 +1,5 @@
+import {saveAlerts} from "@/lib/actions/customer-tools";
+import {CustomerText} from "@/components/customer-language";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/guards";
@@ -22,6 +24,8 @@ export default async function NotificationsPage() {
     .order("created_at", { ascending: false })
     .limit(100);
 
+  const {data:prefs}=await supabase.from("customer_alert_preferences").select("inbox,email").eq("user_id",user.id).maybeSingle();
+  const emailReady=!!(process.env.RESEND_API_KEY && process.env.NOTIFICATION_EMAIL_FROM);
   return (
     <div>
       <PageHeader
@@ -37,6 +41,11 @@ export default async function NotificationsPage() {
         </form>
       </PageHeader>
 
+      <details className="glass-card mb-4 p-4"><summary><CustomerText value="Notification preferences"/></summary><form action={saveAlerts} className="space-y-2 py-2">
+        {["orders","wallet","support","catalog"].map(topic=><fieldset className="flex gap-3 border-b" key={topic}><legend><CustomerText value={topic[0].toUpperCase()+topic.slice(1)}/></legend>
+          <label><input type="checkbox" name="inbox" value={topic} defaultChecked={!prefs||prefs.inbox.includes(topic)}/> <CustomerText value="In panel"/></label>
+          <label><input type="checkbox" name="email" value={topic} disabled={!emailReady} defaultChecked={prefs?.email.includes(topic)}/> Email</label></fieldset>)}
+        {!emailReady&&<p><CustomerText value="Email delivery awaits sender setup"/></p>}<Button><CustomerText value="Save"/></Button></form></details>
       {(notifications ?? []).length === 0 ? (
         <EmptyState
           icon={Bell}
@@ -45,7 +54,12 @@ export default async function NotificationsPage() {
         />
       ) : (
         <div className="space-y-2.5">
-          {(notifications ?? []).map((notif) => {
+          <details className="glass-card mb-4 p-4"><summary><CustomerText value="Notification preferences"/></summary><form action={saveAlerts} className="space-y-2 py-2">
+        {["orders","wallet","support","catalog"].map(topic=><fieldset className="flex gap-3 border-b" key={topic}><legend><CustomerText value={topic[0].toUpperCase()+topic.slice(1)}/></legend>
+          <label><input type="checkbox" name="inbox" value={topic} defaultChecked={!prefs||prefs.inbox.includes(topic)}/> <CustomerText value="In panel"/></label>
+          <label><input type="checkbox" name="email" value={topic} disabled={!emailReady} defaultChecked={prefs?.email.includes(topic)}/> Email</label></fieldset>)}
+        {!emailReady&&<p><CustomerText value="Email delivery awaits sender setup"/></p>}<Button><CustomerText value="Save"/></Button></form></details>
+      {(notifications ?? []).map((notif) => {
             const content = (
               <div
                 className={cn(

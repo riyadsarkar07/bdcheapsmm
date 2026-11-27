@@ -442,6 +442,8 @@ export type HelpArticleFeedback = {
   updated_at: string;
 };
 
+type UserTable<T> = {Row:T;Insert:Partial<T>;Update:Partial<T>;Relationships:[]};
+type CustomerOrder = Pick<Order,"id"|"order_number"|"provider_order_id"|"link"|"status"|"quantity"|"price"|"currency"|"created_at"> & {provider_status:string|null;service_name:string|null;category_name:string|null;note:string|null};
 export type Database = {
   public: {
     Tables: {
@@ -540,6 +542,10 @@ export type Database = {
           }
         ];
       };
+      order_notes:UserTable<{order_id:string;user_id:string;note:string}>;
+      drop_updates:UserTable<{id:string;ticket_id:string;user_id:string;current_count:number|null;screenshot_path:string|null;created_at:string}>;
+      customer_alert_preferences:UserTable<{user_id:string;inbox:string[];email:string[]}>;
+      customer_email_queue:UserTable<{id:string;user_id:string;topic:string;attempts:number;created_at:string;delivered_at:string|null}>;
       order_drop_reports: {
         Row: { ticket_id:string; order_id:string; user_id:string; request_id:string; current_count:number|null; screenshot_path:string|null; created_at:string };
         Insert: never;
@@ -852,8 +858,10 @@ export type Database = {
         ];
       };
     };
-    Views: Record<string, never>;
+    Views: {customer_order_index:{Row:CustomerOrder;Relationships:[]};customer_refill_activity:{Row:{id:string;order_id:string;order_number:string;event:string;ticket_id:string|null;created_at:string};Relationships:[]}};
     Functions: {
+      customer_spending:{Args:Record<string,never>;Returns:{category_name:string;currency:string;spent:number;refunded:number}[]};
+      service_incident:{Args:{p_service:string};Returns:string|null};
       is_admin: { Args: Record<never, never>; Returns: boolean };
       is_banned: { Args: Record<never, never>; Returns: boolean };
       current_profile: { Args: Record<never, never>; Returns: Profile };

@@ -94,6 +94,8 @@ export function ServicesBrowser() {
   const platform = searchParams.get("p") ?? "all";
   const category = searchParams.get("category");
 
+  const [units,setUnits]=React.useState(searchParams.get("units")||""),[budget,setBudget]=React.useState(searchParams.get("budget")||"");
+  const [recent,setRecent]=React.useState<{name:string;id:string}[]>([]);
   const [search, setSearch] = React.useState(searchParams.get("q") ?? "");
   const [debouncedSearch, setDebouncedSearch] = React.useState(search);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
@@ -175,8 +177,9 @@ export function ServicesBrowser() {
     refetchInterval: 15_000,
   });
 
+  React.useEffect(()=>{try{setRecent(JSON.parse(localStorage.getItem("recent:"+profile?.id)||"[]"));}catch{}},[profile?.id]);
   const { data: services, isLoading, isError } = useQuery({
-    queryKey: ["services", platform, category, debouncedSearch, limit, activeCategories.map(c => c.id), kind, refillOnly, savedOnly, descending, profile?.id],
+    queryKey: ["services",units,budget, platform, category, debouncedSearch, limit, activeCategories.map(c => c.id), kind, refillOnly, savedOnly, descending, profile?.id],
     enabled: (platform === "all" || Boolean(category) || activeCategories.length > 0) && (!savedOnly || !!profile?.id),
     queryFn: async () => {
       let q = supabase
@@ -196,7 +199,8 @@ export function ServicesBrowser() {
       if (kind) q = q.eq("type", kind);
       if (refillOnly) q = q.in("meta->>refill", ["true", "1", "yes", "Yes"]);
       if (profile?.id) q = q.eq("favorites.user_id", profile.id);
-      if (debouncedSearch) q = q.ilike("name", `%${debouncedSearch}%`);
+      if(debouncedSearch)q=/^#?\d+$/.test(debouncedSearch.trim())?q.eq("provider_service_id",debouncedSearch.trim().replace(/^#/,"")):q.ilike("name",`%${debouncedSearch}%`);
+      if(+units>0){q=q.lte("min_quantity",+units).gte("max_quantity",+units);if(+budget>0)q=q.gte("price",5/+units).lt("price",(Math.floor((+budget*100+1e-8)/126)+0.5)*10/+units);}
       q = q.order("price", { ascending: !descending }).order("id").limit(limit);
       const { data, error } = await q;
       if (error) throw error;
@@ -251,9 +255,11 @@ export function ServicesBrowser() {
   }
 
   function selectService(service: ServiceRow) {
+    if(profile?.id){const next=[{id:service.id,name:service.name},...recent.filter(v=>v.id!==service.id)].slice(0,5);
+      setRecent(next);try{localStorage.setItem("recent:"+profile.id,JSON.stringify(next));}catch{}}
     if (window.matchMedia("(max-width: 767px)").matches) {
       const params = new URLSearchParams(searchParams.toString());
-      for (const [key, value] of Object.entries({ q: search, kind, refill: refillOnly ? "1" : "", saved: savedOnly ? "1" : "", desc: descending ? "1" : "", limit: String(limit), focus: service.id })) {
+      for (const [key, value] of Object.entries({ q: search,units,budget, kind, refill: refillOnly ? "1" : "", saved: savedOnly ? "1" : "", desc: descending ? "1" : "", limit: String(limit), focus: service.id })) {
         if (value) params.set(key, value);
         else params.delete(key);
       }
@@ -304,6 +310,9 @@ export function ServicesBrowser() {
         <label><input type="checkbox" checked={refillOnly} onChange={e=>setRefillOnly(e.target.checked)} /> {t("Provider supports refill")}</label>
         <label><input type="checkbox" checked={savedOnly} onChange={e=>setSavedOnly(e.target.checked)} /> {t("My favorites")}</label>
       </div>
+      <div className="mb-4 flex flex-wrap gap-3 text-sm"><label>{t("Quantity")}<Input type="number" min="1" value={units} onChange={e=>setUnits(e.target.value)}/></label><label>{t("Budget (BDT)")}<Input type="number" min="0" disabled={!Number(units)} value={budget} onChange={e=>setBudget(e.target.value)}/></label></div>
+      {!!recent.length&&<details className="mb-3"><summary>{t("Recently viewed")}</summary>{recent.map(v=><a key={v.id} className="block text-primary" href={"/services/"+v.id}>{v.name}</a>)}</details>}
+      <details className="mb-4 rounded border p-3"><summary>{t("First order guide")}</summary><p>{t("Choose a service, enter quantity and a public link, confirm the wallet charge, then track delivery in My Orders.")}</p></details>
       {/* Platform menu: pick a platform to browse its services */}
       <div className="mb-6">
         <p className="eyebrow mb-3"><CustomerText value="Browse by platform" /></p>
@@ -409,7 +418,7 @@ export function ServicesBrowser() {
           <div className="relative w-full max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder={t("Search services by name...")}
+              placeholder={t("Search name or service ID")}
               className="pl-9 pr-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -438,7 +447,8 @@ export function ServicesBrowser() {
       {selected ? (
         <div ref={detailRef} className="mb-8 grid gap-6 lg:grid-cols-5">
           <div className="lg:col-span-2">
-            <OrderForm
+            <a href={"/services/"+selected.id} className="text-sm text-primary underline">{t("Order multiple links")}</a>
+            <OrderForm userId={profile?.id??""} serviceType={selected.type}
               key={selected.id}
               providerServiceId={selected.provider_service_id}
               serviceId={selected.id}
@@ -536,6 +546,7 @@ export function ServicesBrowser() {
 
                 <h3 className="line-clamp-2 min-h-[2.5rem] text-sm font-semibold leading-snug">{service.name}</h3>
 
+                {service.name.includes("|")&&<details className="text-xs"><summary>{t("Service codes")}</summary>{service.name.split("|").map(x=>x.trim().toUpperCase()).filter(v=>/^(R\d+|NR|HQ|[0-9.]+K\/D)$/.test(v)).map((v,i)=><p key={i}>{v} · {v==="NR"?t("No refill (provider label)"):v==="HQ"?t("High quality (provider label)"):v.startsWith("R")?v.slice(1)+" "+t("advertised refill days"):v.split("K")[0]+" "+t("thousand per day (advertised)")}</p>)}{service.description}</details>}
                 <p className="mt-2 text-xl font-bold tabular-nums text-primary">{formatUsd(service.price, 4)}
                   <span className="ml-1 text-xs font-medium text-muted-foreground">{t("per 1,000")}</span>
                 </p>
@@ -549,6 +560,7 @@ export function ServicesBrowser() {
                     disabled={comparison.length === 2 && !comparison.some(s => s.id === service.id)}
                     onClick={() => setComparison(items => items.some(s => s.id === service.id) ? items.filter(s => s.id !== service.id) : [...items,service].slice(0,2))}>
                     {t(comparison.some(s => s.id === service.id) ? "Remove" : "Compare")}</Button>
+                  <button className="text-xs underline" onClick={async()=>{try{await navigator.clipboard.writeText(location.origin+"/services/"+service.id);toast.success(t("Copied"));}catch{toast.error(t("Could not copy link"));}}}>{t("Share")}</button>
                   <Button
                     size="sm"
                     variant={isSelected ? "gradient" : "outline"}

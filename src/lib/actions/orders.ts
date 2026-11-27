@@ -1,5 +1,6 @@
 "use server";
 
+import {createHash} from "node:crypto";
 import { headers } from "next/headers";
 import { createOrderSchema, retryOrderSchema } from "@/lib/validations";
 import { fail, ok, requireUser, isAdminProfile, type ActionResult } from "@/lib/guards";
@@ -7,6 +8,7 @@ import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { generateOrderNumber, formatCurrency } from "@/lib/utils";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { providerApi, ProviderCancelRejected, ProviderRefillRejected } from "@/lib/provider/smmfollow";
+import {refillDeadline} from "@/lib/customer-order";
 import { targetLinkError } from "@/lib/order-link";
 import { detectPlatform, parseChargeError } from "@/lib/pricing";
 import { assertOrderPricingSafety } from "@/lib/pricing-safety";
@@ -45,13 +47,26 @@ async function updateOrderVerified(
   }
 }
 
+function checkoutNumber(user:string,request:string,service:string,quantity:number,link:string,coupon="") {
+  return "SMM"+createHash("sha256").update(JSON.stringify([user,request,service,quantity,link,coupon])).digest("hex").slice(0,24).toUpperCase();
+}
+export async function lookupCheckout(request:string,service:string,quantity:number,link:string,coupon=""){
+  const {user}=await requireUser();
+  if(!user || !/^[a-f0-9-]{36}$/i.test(request))return null;
+  const {createClient}=await import("@/lib/supabase/server");
+  const db=await createClient();
+  const result=await db.from("orders").select("id").eq("order_number",checkoutNumber(user.id,request,service,quantity,link,coupon)).eq("user_id",user.id).maybeSingle();
+  if(result.error)throw Error("Could not check previous checkout");
+  return result.data?.id ?? null;
+}
 export async function createOrderAction(input: {
   serviceId: string;
   quantity: number;
   link: string;
   coupon?: string;
+  requestId?: string;
   expectedUsd?: number;
-}): Promise<ActionResult<{ orderId: string; orderNumber: string }>> {
+}): Promise<ActionResult<{ orderId: string; orderNumber: string;status?:string }>> {
   const headerStore = await headers();
   const ip = getClientIp(headerStore);
 
@@ -76,6 +91,7 @@ export async function createOrderAction(input: {
     link: parsed.data.link,
     coupon: parsed.data.coupon,
     expectedUsd: input.expectedUsd,
+    requestId:input.requestId,
     ip,
     userAgent: headerStore.get("user-agent"),
   });
@@ -97,7 +113,7 @@ async function placeOrder({
   quantity,
   link,
   coupon,
-  expectedUsd,
+  expectedUsd, requestId,
   ip,
   userAgent,
 }: {
@@ -106,13 +122,23 @@ async function placeOrder({
   quantity: number;
   link: string;
   coupon?: string;
+  requestId?: string;
   expectedUsd?: number;
   ip?: string | null;
   userAgent?: string | null;
-}): Promise<ActionResult<{ orderId: string; orderNumber: string }>> {
+}): Promise<ActionResult<{ orderId: string; orderNumber: string;status?:string }>> {
   const { createClient } = await import("@/lib/supabase/server");
   const supabase = await createClient();
 
+  if(requestId && !/^[a-f0-9-]{36}$/i.test(requestId))return fail("Invalid checkout reference");
+  const orderNumber=requestId?checkoutNumber(user.id,requestId,serviceId,quantity,link,coupon):generateOrderNumber();
+  async function recover(){
+    if(!requestId)return null;
+    const {data}=await supabase.from("orders").select("id,order_number,status").eq("user_id",user.id).eq("order_number",orderNumber).maybeSingle();
+    return data?ok({orderId:data.id,orderNumber:data.order_number,status:data.status}):null;
+  }
+  const previous=await recover();
+  if(previous)return previous;
   const { data: service, error: serviceError } = await supabase
     .from("services")
     .select("id, name, categories(name,slug), category_id, provider_id, provider_service_id, price, provider_price, min_quantity, max_quantity, type, is_active")
@@ -129,7 +155,7 @@ async function placeOrder({
     return fail("This service has no provider attached.");
   }
 
-  const linkError = targetLinkError(link, detectPlatform(service.categories?.name, service.categories?.slug));
+  const linkError = targetLinkError(link, detectPlatform(service.categories?.name, service.categories?.slug),service.type);
   if (linkError) return fail(linkError);
   const qty = quantity;
   if (qty < service.min_quantity || qty > service.max_quantity) {
@@ -171,7 +197,7 @@ async function placeOrder({
   }
   const providerCost = pricingCheck.providerCost;
 
-  const orderNumber = generateOrderNumber();
+
 
   // Charge the wallet and insert the order in one DB transaction. If the
   // locked profile cannot cover `price`, no order row is created.
@@ -188,6 +214,8 @@ async function placeOrder({
   });
 
   if (orderError || !order) {
+    const existing=await recover();
+    if(existing)return existing;
     const parsed = parseChargeError(orderError?.message);
     if (parsed.insufficient) {
       return fail(
@@ -297,7 +325,7 @@ async function placeOrder({
   // clear warning so the order is never silently left in "pending" with no
   // provider reference. The log entry above records the full failure.
   return ok(
-    { orderId: order.id, orderNumber },
+    { orderId: order.id, orderNumber,status },
     updateError
       ? `Order #${orderNumber} was submitted to the provider but the status could not be saved yet: ${updateError.message}`
       : undefined
@@ -434,7 +462,7 @@ export async function refillOrderAction(orderId: string, askProvider = false): P
 
   const { data: order } = await supabase
     .from("orders")
-    .select("id, user_id, provider_id, provider_order_id, order_number, refill_count, status, services(meta, name, description)")
+    .select("id, user_id, provider_id, provider_order_id, order_number, refill_count, status, provider_response, services(meta, name, description)")
     .eq("id", orderId)
     .single();
 
@@ -442,6 +470,10 @@ export async function refillOrderAction(orderId: string, askProvider = false): P
   if (order.user_id !== user.id && !isAdminProfile(user)) return fail("Forbidden.");
   if (!order.provider_order_id) return fail("No provider order reference.");
   if (!["completed", "partial"].includes(order.status)) return fail("Refill requires a completed or partial order.");
+  const deadline=refillDeadline(order.provider_response);
+  if(deadline&&Date.parse(deadline)<Date.now())return fail("Refill window ended");
+  const response=order.provider_response;
+  if(response&&typeof response==="object"&&!Array.isArray(response)&&["pending","processing","in progress"].includes(String(response.refill_status).toLowerCase()))return fail("A refill is under review");
   if (!(askProvider && isAdminProfile(user)) && refillTerms(order.services?.meta, order.services?.name, order.services?.description ?? "").disabled) return fail("Refill is not available for this service.");
   if ((order.refill_count ?? 0) >= 2) return fail("Refill limit reached for this order.");
   if (!order.provider_id) return fail("Provider not found.");
@@ -476,8 +508,8 @@ export async function refillOrderAction(orderId: string, askProvider = false): P
 
 export async function retryOrderAction(
   orderId: string,
-  link: string
-): Promise<ActionResult<{ orderId: string; orderNumber: string }>> {
+  link: string, requestId?:string
+): Promise<ActionResult<{ orderId: string; orderNumber: string;status?:string }>> {
   const headerStore = await headers();
   const ip = getClientIp(headerStore);
 
@@ -515,6 +547,7 @@ export async function retryOrderAction(
   // quantity, new link). The original failed order row is left untouched.
   const result = await placeOrder({
     user,
+    requestId,
     serviceId: order.service_id,
     quantity: order.quantity,
     link: parsed.data.link,

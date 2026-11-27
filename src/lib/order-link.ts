@@ -18,7 +18,7 @@ export function targetExample(platform: string, serviceType: string | null) {
   return exampleLinkForPlatform(platform);
 }
 
-export function targetLinkError(input: string, platform: string) {
+export function targetLinkError(input: string, platform: string, type?:string|null) {
   let url: URL;
   try { url = new URL(input); } catch { return "Enter a valid http or https link."; }
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return "Enter a valid http or https link.";
@@ -26,5 +26,8 @@ export function targetLinkError(input: string, platform: string) {
   if (allowed && !allowed.some(host => url.hostname === host || url.hostname.endsWith("." + host))) {
     return `Use a ${PLATFORM_LABELS[platform]} link for this service.`;
   }
+  if(platform==="instagram" && type==="followers" && /^\/(p|reels?|tv|stories)\//i.test(url.pathname))return "Use a profile link.";
+  if(platform==="instagram" && ["views","likes","comment"].includes(type??"") && !/^\/(p|reels?|tv|share)\//i.test(url.pathname))return "Use a post or reel link.";
+  if(platform==="facebook" && type==="followers" && /\/(posts|reel|videos|watch)(?:\/|$)/i.test(url.pathname))return "Use a page or profile link.";
   return null;
 }

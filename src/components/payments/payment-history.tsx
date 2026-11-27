@@ -1,3 +1,5 @@
+import {CustomerText} from "@/components/customer-language";
+import {dhakaTime} from "@/lib/customer-order";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +14,7 @@ export function PaymentHistory({ requests }: { requests: PaymentRequest[] }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <History className="h-4 w-4" /> Deposit History
+          <History className="h-4 w-4" /> <CustomerText value="Deposit History"/>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -36,8 +38,9 @@ export function PaymentHistory({ requests }: { requests: PaymentRequest[] }) {
                     {request.method} · {request.transaction_id}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {formatDateTime(request.created_at)}
+                    {dhakaTime(request.created_at)}
                   </p>
+                  <p className="text-xs"><CustomerText value={request.status==="pending"?"Submitted · awaiting review":"Review updated"}/>{request.status!=="pending"&&" · "+dhakaTime(request.updated_at)}</p>
                   {request.admin_note ? (
                     <p className="mt-1 text-xs text-muted-foreground">
                       Note: {request.admin_note}

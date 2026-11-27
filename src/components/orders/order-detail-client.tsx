@@ -27,6 +27,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {dhakaTime,refillDeadline} from "@/lib/customer-order";
 import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
@@ -102,9 +103,13 @@ export function OrderDetailClient({
     if (action !== null) return;
     setAction("retry");
     try {
-      const result = await retryOrderAction(orderState.id, retryLink);
+      const attemptKey="retry:"+orderState.id+":"+retryLink;
+      const requestId=sessionStorage.getItem(attemptKey)||crypto.randomUUID();
+      sessionStorage.setItem(attemptKey,requestId);
+      const result=await retryOrderAction(orderState.id,retryLink,requestId);
       if (result.success && result.data) {
-        toast.success("New order created — retry submitted");
+        sessionStorage.removeItem(attemptKey);
+        toast.success(t("Order recorded"));
         setRetryOpen(false);
         router.refresh();
         router.push(`/orders/${result.data.orderId}`);
@@ -145,6 +150,10 @@ export function OrderDetailClient({
   const canCancel = ["pending", "processing", "in_progress"].includes(orderState.status);
   const canRefill = orderState.status === "completed" || orderState.status === "partial";
   const canRetry = orderState.status === "failed" || orderState.status === "rejected";
+  const deadline=refillDeadline(snapshot);
+  const expired=!!deadline && Date.parse(deadline)<Date.now();
+  const reviewing=snapshot && typeof snapshot==="object" && !Array.isArray(snapshot) && ["pending","processing","in progress"].includes(String(snapshot.refill_status).toLowerCase());
+  const reason=!canRefill?"Refill opens after delivery":expired?"Refill window ended":reviewing?"A refill is under review":!order.provider_order_id?"Awaiting provider order ID":(order.refill_count??0)>=2?"Refill limit reached":refillDisabled?"No automatic refill":null;
   const delivered = order.remain == null || order.quantity <= 0 ? null : Math.min(order.quantity, Math.max(0, order.quantity - order.remain));
   const progress = delivered == null ? null : Math.round(100 * delivered / order.quantity);
 
@@ -158,8 +167,8 @@ export function OrderDetailClient({
     { label: "Start Count", value: orderState.start_count?.toLocaleString() ?? "—" },
     { label: "Remaining", value: orderState.remain?.toLocaleString() ?? "—" },
     { label: "Refills", value: String(orderState.refill_count ?? 0) },
-    { label: "Created", value: formatDateTime(orderState.created_at) },
-    { label: "Updated", value: formatDateTime(orderState.updated_at) },
+    { label: "Created", value: dhakaTime(orderState.created_at) },
+    { label: "Updated", value: dhakaTime(orderState.updated_at) },
   ];
 
   return (
@@ -172,7 +181,7 @@ export function OrderDetailClient({
         <div className="min-w-0">
           <p className="eyebrow mb-1"><CustomerText value="Order details" /></p>
           <h1 className="break-words text-xl font-bold sm:text-2xl">{orderState.services?.name ?? t("Order details")}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{t("Last provider check")} · {checkedAt ? formatDateTime(checkedAt) : t("Not checked yet")}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{t("Last provider check")} · {checkedAt ? dhakaTime(checkedAt) : t("Not checked yet")}</p>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <OrderStatusBadge providerStatus={providerStatus || (order.provider_order_id ? "Awaiting provider status" : null)} status={orderState.status} />
@@ -267,10 +276,13 @@ export function OrderDetailClient({
               {order.service_id && !canCancel && <Button asChild variant="gradient" className="w-full"><Link href={`/services/${order.service_id}?repeat=${order.id}`}>{t("Order again")}</Link></Button>}
               <Button asChild variant={canCancel ? "gradient" : "outline"} className="w-full"><Link href={`/support/new?order=${order.id}`}>{t("Get order support")}</Link></Button>
             </>}
-            {canRefill && (!refillDisabled || isAdmin) && order.provider_order_id && (order.refill_count ?? 0) < 2 && <Button
+            {canRefill && !expired && !reviewing && (!refillDisabled || isAdmin) && order.provider_order_id && (order.refill_count ?? 0) < 2 && <Button
               variant="outline" className="w-full" disabled={action !== null} onClick={() => runAction("refill", () => refillOrderAction(order.id, isAdmin && refillDisabled))}>
               <RotateCcw />{t("Request refill")}
             </Button>}
+            {reason&&<p className="text-xs">{t(reason)}</p>}
+            {canRefill&&<p>{deadline?t("Refill deadline")+" · "+dhakaTime(deadline):t("Provider has not confirmed a refill deadline")}</p>}
+            {order.status==="partial"&&<p>{t("Partially delivered. Check the remaining count and refund history.")}</p>}
             {canRefill && <p className="text-xs text-muted-foreground">{t("Refill:")} {t(refillLabel)}</p>}
             {canRetry && <Button variant="outline" className="w-full" disabled={action !== null} onClick={() => setRetryOpen(true)}><Zap />{t("Retry Order")}</Button>}
             <details className="rounded-lg border px-3 py-2">

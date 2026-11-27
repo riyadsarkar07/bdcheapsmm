@@ -1,3 +1,4 @@
+import {BulkOrders} from "@/components/services/bulk-orders";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -125,7 +126,7 @@ export default async function ServiceOrderPage({
 
         {/* Order form */}
         <div className="order-1 lg:order-2 lg:col-span-2">
-          <OrderForm
+          <OrderForm userId={user.id} serviceType={service.type}
             key={repeat ?? service.id}
             providerServiceId={service.provider_service_id}
             serviceId={service.id}
@@ -143,6 +144,7 @@ export default async function ServiceOrderPage({
             )}
             averageTime={service.average_time}
           />
+          <BulkOrders user={user.id} service={service.id} rate={Number(service.price)} min={service.min_quantity} max={service.max_quantity} currency={user.currency} balance={user.balance} type={service.type} platform={detectPlatform(service.categories?.name,service.categories?.slug)} />
         </div>
       </div>
     </div>

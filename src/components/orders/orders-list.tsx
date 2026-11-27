@@ -1,6 +1,8 @@
 "use client";
 
-import { CustomerText } from "@/components/customer-language";
+import {CopyButton} from "@/components/copy-button";
+import {dhakaTime} from "@/lib/customer-order";
+import {useCustomerText,CustomerText} from "@/components/customer-language";
 import * as React from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -47,40 +49,53 @@ export function OrdersList({
   userId: string;
   statusFilter?: string;
 }) {
+  const t=useCustomerText();
   const supabase = createClient();
   const [visible, setOrders] = React.useState(initialOrders);
   const [total, setTotal] = React.useState(initialTotal);
   const [error, setError] = React.useState("");
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState(statusFilter ?? "all");
+  const [from,setFrom]=React.useState(""),[to,setTo]=React.useState(""),[platform,setPlatform]=React.useState(""),[exporting,setExporting]=React.useState(false);
   const [page, setPage] = React.useState(0);
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
 
+  const load=React.useCallback(async(offset:number,size:number)=>{
+    let q=supabase.from("customer_order_index").select("*",{count:"exact"});
+    if(status!=="all")q=q.eq("status",status as OrderStatus);
+    if(from)q=q.gte("created_at",from+"T00:00:00+06:00");
+    if(to)q=q.lte("created_at",to+"T23:59:59.999999+06:00");
+    if(platform)q=q.ilike("category_name","%"+platform+"%");
+    const term=search.trim().replace(/^#/,"");
+    if(term){const pattern=JSON.stringify("%"+term.replace(/[\\%_]/g,"\\$&")+"%");
+      q=q.or(["order_number","provider_order_id","link","service_name","note"].map(f=>f+".ilike."+pattern).join(","));}
+    return await q.order("created_at",{ascending:false}).order("id").range(offset,offset+size-1);
+  },[supabase,status,search,from,to,platform]);
+  async function exportCsv(){
+    setExporting(true);
+    try{
+      const lines=[["Order","Provider ID","Service","Link","Quantity","Price","Currency","Status","Date","Project"]];
+      for(let offset=0;;offset+=500){const result=await load(offset,500);if(result.error)throw result.error;
+        for(const r of result.data)lines.push([r.order_number,r.provider_order_id||"",r.service_name||"",r.link,String(r.quantity),String(r.price),r.currency,r.provider_status||r.status,r.created_at,r.note||""]);
+        if(result.data.length<500)break;}
+      const content=lines.map(row=>row.map(v=>'"'+(/^[=+@\-\t\r]/.test(v)?"'":"")+v.replaceAll('"','""')+'"').join(",")).join("\r\n");
+      const url=URL.createObjectURL(new Blob(["\uFEFF",content],{type:"text/csv;charset=utf-8"}));
+      const a=document.createElement("a");a.href=url;a.download="orders.csv";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }catch{setError(t("Could not export orders"));}finally{setExporting(false);}
+  }
   React.useEffect(() => {
     let active = true;
     let revision = 0;
     let timer: ReturnType<typeof setTimeout>;
     async function refresh() {
       const version = ++revision;
-      let query = supabase.from("orders")
-        .select("id, order_number, provider_order_id, provider_status:provider_response->>status, service_id, services(name), matching:services(), quantity, price, status, created_at, currency", { count: "exact" })
-        .eq("user_id", userId);
-      if (status !== "all") query = query.eq("status", status as OrderStatus);
-      const term = search.trim().replace(/^#/, "");
-      if (term) {
-        const pattern = "%" + term.replace(/[\\%_]/g, "\\$&") + "%";
-        const quotedPattern = JSON.stringify(pattern);
-        query = query.ilike("matching.name", pattern)
-          .or(`order_number.ilike.${quotedPattern},provider_order_id.ilike.${quotedPattern},matching.not.is.null`);
-      }
-      const result = await query.order("created_at", { ascending: false })
-        .order("id").range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+      const result=await load(page*PAGE_SIZE,PAGE_SIZE);
       if (!active || revision !== version) return;
       if (result.error?.code === "PGRST103" && page > 0) { setPage(0); return; }
       if (result.error) { setError("Could not load orders. Please try again."); return; }
       setError("");
-      setOrders(result.data ?? []);
+      setOrders((result.data||[]).map(r=>({...r,service_id:null,services:{name:r.service_name||"Service"}})));
       setTotal(result.count ?? 0);
       setPage(p => Math.min(p, Math.max(0, Math.ceil((result.count ?? 0) / PAGE_SIZE) - 1)));
     }
@@ -91,7 +106,7 @@ export function OrdersList({
       .subscribe();
     const poll = setInterval(schedule, 30_000);
     return () => { active = false; clearTimeout(timer); clearInterval(poll); void supabase.removeChannel(channel); };
-  }, [supabase, userId, status, search, page]);
+  }, [supabase,userId,load,page]);
 
   return (
     <div className="space-y-4">
@@ -99,7 +114,7 @@ export function OrdersList({
         <div className="relative w-full sm:max-w-xs">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search order #, provider ID or service"
+            placeholder={t("Search ID, link, service or project")}
             className="pl-9"
             value={search}
             onChange={(e) => {
@@ -134,6 +149,10 @@ export function OrdersList({
         </Select>
       </div>
 
+      <div className="flex flex-wrap items-end gap-3 text-sm"><label>{t("From")}<Input type="date" value={from} onChange={e=>{setFrom(e.target.value);setPage(0);}}/></label>
+        <label>{t("To")}<Input type="date" min={from} value={to} onChange={e=>{setTo(e.target.value);setPage(0);}}/></label>
+        <label>{t("Platform")}<Input value={platform} placeholder="Facebook" onChange={e=>{setPlatform(e.target.value);setPage(0);}}/></label>
+        <Button variant="outline" disabled={exporting} onClick={exportCsv}>CSV ↓</Button><Link className="p-2 text-primary underline" href="/orders/refills">{t("My refill requests")}</Link></div>
       {error ? <p role="alert">{error}</p> : visible.length === 0 ? (
         <EmptyState
           title="No matching orders"
@@ -175,7 +194,7 @@ export function OrdersList({
                         <OrderStatusBadge providerStatus={order.provider_status || (order.provider_order_id ? "Awaiting provider status" : null)} status={order.status} />
                       </td>
                       <td className="px-4 py-3 text-right text-muted-foreground">
-                        {formatDateTime(order.created_at, "MMM d, h:mm a")}
+                        {dhakaTime(order.created_at)}
                       </td>
                     </tr>
                   ))}
@@ -191,21 +210,12 @@ export function OrdersList({
                     href={`/orders/${order.id}`}
                     className="block px-4 py-3 transition-colors hover:bg-muted/50"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold text-primary">#{order.order_number}</span>
-                      <OrderStatusBadge providerStatus={order.provider_status || (order.provider_order_id ? "Awaiting provider status" : null)} status={order.status} />
-                    </div>
-                    {order.provider_order_id && (
-                      <p className="break-all text-xs text-muted-foreground">Provider Order ID: {order.provider_order_id}</p>
-                    )}
-                    <p className="mt-1 line-clamp-1 text-sm">{truncate(order.services?.name ?? "Service", 60)}</p>
-                    <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
-                      <span className="tabular-nums">
-                        {order.quantity.toLocaleString()} units · {formatCurrency(order.price, order.currency)}
-                      </span>
-                      <span>{formatDateTime(order.created_at, "MMM d, h:mm a")}</span>
-                    </div>
-                  </Link>
+                    <div className="flex flex-wrap items-start justify-between gap-2"><p className="min-w-0 flex-1 break-words font-semibold">{order.services?.name ?? t("Service")}</p>
+                      <OrderStatusBadge providerStatus={order.provider_status} status={order.status}/></div>
+                    <p className="mt-2">{t("Quantity")} {order.quantity.toLocaleString()} · {formatCurrency(order.price,order.currency)}</p><small>{dhakaTime(order.created_at)}</small></Link>
+                    <div className="space-y-1 px-4 pb-3 text-xs"><div className="break-all">#{order.order_number} <CopyButton value={order.order_number}/></div>
+                    {order.provider_order_id&&<div className="break-all">{t("Provider Order ID")} · {order.provider_order_id} <CopyButton value={order.provider_order_id}/></div>}
+                    <Link href={"/support/new?order="+order.id} className="text-primary underline">{t("Get order support")}</Link></div>
                 </li>
               ))}
             </ul>

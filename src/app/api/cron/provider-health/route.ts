@@ -1,3 +1,4 @@
+import {deliverNotificationEmails} from "@/lib/notification-email";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { refreshRefillCatalog } from "@/lib/provider/refill-sync";
@@ -32,7 +33,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: error?.message ?? "No providers" }, { status: 500 });
   }
 
-  const [tally, refill] = await Promise.all([runProviderHealthChecks(supabase, providers), refreshRefillCatalog()]);
+  const [tally, refill, emailed] = await Promise.all([runProviderHealthChecks(supabase, providers), refreshRefillCatalog(),deliverNotificationEmails()]);
 
-  return NextResponse.json({ ok: refill.failed === 0, ...tally, refill }, { status: refill.failed ? 502 : 200 });
+  return NextResponse.json({ ok: refill.failed === 0, ...tally, refill, emailed }, { status: refill.failed ? 502 : 200 });
 }
