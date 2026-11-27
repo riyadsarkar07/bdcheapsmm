@@ -52,7 +52,7 @@ export default async function ServiceOrderPage({
 
       <div className="grid gap-6 lg:grid-cols-5">
         {/* Service info */}
-        <div className="order-2 lg:order-1 lg:col-span-3">
+        <div className="min-w-0 [overflow-wrap:anywhere] order-2 lg:order-1 lg:col-span-3">
           <div className="glass-card rounded-xl p-6">
             <div className="mb-4 flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl gradient-bg text-white shadow-lg">
@@ -125,7 +125,7 @@ export default async function ServiceOrderPage({
         </div>
 
         {/* Order form */}
-        <div className="order-1 lg:order-2 lg:col-span-2">
+        <div className="min-w-0 [overflow-wrap:anywhere] order-1 lg:order-2 lg:col-span-2">
           <OrderForm userId={user.id} serviceType={service.type}
             key={repeat ?? service.id}
             providerServiceId={service.provider_service_id}

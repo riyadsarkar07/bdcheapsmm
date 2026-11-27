@@ -23,6 +23,7 @@ import { formatCurrency, formatDateTime, truncate } from "@/lib/utils";
 import type { OrderStatus } from "@/lib/types/database";
 
 type OrderRow = {
+  issue?:string;ticket_id?:string|null;
   id: string;
   order_number: string;
   provider_order_id: string | null;
@@ -57,12 +58,13 @@ export function OrdersList({
   const [search, setSearch] = React.useState("");
   const [status, setStatus] = React.useState(statusFilter ?? "all");
   const [from,setFrom]=React.useState(""),[to,setTo]=React.useState(""),[platform,setPlatform]=React.useState(""),[exporting,setExporting]=React.useState(false);
+  const [attention,setAttention]=React.useState(false);
   const [page, setPage] = React.useState(0);
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
 
   const load=React.useCallback(async(offset:number,size:number)=>{
-    let q=supabase.from("customer_order_index").select("*",{count:"exact"});
+    let q=supabase.from(attention?"customer_action_orders":"customer_order_index").select("*",{count:"exact"});
     if(status!=="all")q=q.eq("status",status as OrderStatus);
     if(from)q=q.gte("created_at",from+"T00:00:00+06:00");
     if(to)q=q.lte("created_at",to+"T23:59:59.999999+06:00");
@@ -71,7 +73,7 @@ export function OrdersList({
     if(term){const pattern=JSON.stringify("%"+term.replace(/[\\%_]/g,"\\$&")+"%");
       q=q.or(["order_number","provider_order_id","link","service_name","note"].map(f=>f+".ilike."+pattern).join(","));}
     return await q.order("created_at",{ascending:false}).order("id").range(offset,offset+size-1);
-  },[supabase,status,search,from,to,platform]);
+  },[supabase,status,search,from,to,platform,attention]);
   async function exportCsv(){
     setExporting(true);
     try{
@@ -108,8 +110,14 @@ export function OrdersList({
     return () => { active = false; clearTimeout(timer); clearInterval(poll); void supabase.removeChannel(channel); };
   }, [supabase,userId,load,page]);
 
+  function followup(row:OrderRow){
+    if(!attention || !row.issue)return null;
+    const href=row.ticket_id?"/support/"+row.ticket_id:row.issue==="Refill declined"?"/support/new?order="+row.id+"&drop=1":"/orders/"+row.id+"#order-actions";
+    return <div className="my-2 text-sm"><p>{t(row.issue)}</p><Link className="text-primary underline" href={href}>{t(row.ticket_id?"View reply":row.issue==="Refill declined"?"Review drop report":"Review order")}</Link></div>;
+  }
   return (
     <div className="space-y-4">
+      <Button aria-pressed={attention} variant={attention?"gradient":"outline"} onClick={()=>{setAttention(v=>!v);setPage(0);}}>{t("Needs your attention")}</Button>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full sm:max-w-xs">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -181,6 +189,7 @@ export function OrdersList({
                         <Link href={`/orders/${order.id}`} className="font-semibold text-primary hover:underline">
                           #{order.order_number}
                         </Link>
+                        {followup(order)}
                         {order.provider_order_id && (
                           <p className="break-all text-xs text-muted-foreground">Provider Order ID: {order.provider_order_id}</p>
                         )}
@@ -213,7 +222,7 @@ export function OrdersList({
                     <div className="flex flex-wrap items-start justify-between gap-2"><p className="min-w-0 flex-1 break-words font-semibold">{order.services?.name ?? t("Service")}</p>
                       <OrderStatusBadge providerStatus={order.provider_status} status={order.status}/></div>
                     <p className="mt-2">{t("Quantity")} {order.quantity.toLocaleString()} · {formatCurrency(order.price,order.currency)}</p><small>{dhakaTime(order.created_at)}</small></Link>
-                    <div className="space-y-1 px-4 pb-3 text-xs"><div className="break-all">#{order.order_number} <CopyButton value={order.order_number}/></div>
+                    <div className="space-y-1 px-4 pb-3 text-xs">{followup(order)}<div className="break-all">#{order.order_number} <CopyButton value={order.order_number}/></div>
                     {order.provider_order_id&&<div className="break-all">{t("Provider Order ID")} · {order.provider_order_id} <CopyButton value={order.provider_order_id}/></div>}
                     <Link href={"/support/new?order="+order.id} className="text-primary underline">{t("Get order support")}</Link></div>
                 </li>

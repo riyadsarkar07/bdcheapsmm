@@ -134,6 +134,7 @@ export type Service = {
 };
 
 export type Order = {
+  checkout_terms?: Json | null;
   id: string;
   order_number: string;
   user_id: string;
@@ -858,7 +859,7 @@ export type Database = {
         ];
       };
     };
-    Views: {customer_order_index:{Row:CustomerOrder;Relationships:[]};customer_refill_activity:{Row:{id:string;order_id:string;order_number:string;event:string;ticket_id:string|null;created_at:string};Relationships:[]}};
+    Views: {customer_action_orders:{Row:CustomerOrder & {issue:string;ticket_id:string|null};Relationships:[]};customer_order_index:{Row:CustomerOrder;Relationships:[]};customer_refill_activity:{Row:{id:string;order_id:string;order_number:string;event:string;ticket_id:string|null;created_at:string};Relationships:[]}};
     Functions: {
       customer_spending:{Args:Record<string,never>;Returns:{category_name:string;currency:string;spent:number;refunded:number}[]};
       service_incident:{Args:{p_service:string};Returns:string|null};

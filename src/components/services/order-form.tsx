@@ -132,7 +132,19 @@ export function OrderForm({userId,serviceType,
   });
 
   const storageKey="checkout:"+userId+":"+serviceId;
-  const [name,setName]=React.useState(""),[editing,setEditing]=React.useState(false);
+  const [name,setName]=React.useState("");
+  const [keyboardInset,setKeyboardInset]=React.useState(0);
+  React.useEffect(()=>{
+    const viewport=window.visualViewport;
+    if(!viewport)return;
+    function measure(){
+      if(viewport)setKeyboardInset(Math.max(0,window.innerHeight-viewport.height-viewport.offsetTop));
+    }
+    measure();
+    viewport.addEventListener("resize",measure);
+    viewport.addEventListener("scroll",measure);
+    return ()=>{viewport.removeEventListener("resize",measure);viewport.removeEventListener("scroll",measure);};
+  },[]);
   const [templates,setTemplates]=React.useState<{name:string;quantity:number;link:string}[]>([]);
   const [retryCheck,checkAgain]=React.useState(0);
   const [recovering,setRecovering]=React.useState(false);
@@ -268,7 +280,7 @@ export function OrderForm({userId,serviceType,
     <motion.div
       initial={reduced ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glass-card rounded-xl p-4 sm:p-6"
+      className="glass-card min-w-0 rounded-xl p-4 sm:p-6"
     >
       <div className="mb-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -291,7 +303,7 @@ export function OrderForm({userId,serviceType,
           localStorage.setItem(storageKey+":templates",JSON.stringify(next));setTemplates(next);setName("");
         }}>{t("Save template")}</Button>{templates.map(v=><Button type="button" variant="ghost" key={v.name} onClick={()=>form.reset({link:v.link,quantity:v.quantity,coupon:""})}>{v.name}</Button>)}</details>
       <Form {...form}>
-        <form onFocusCapture={e=>setEditing(e.target instanceof HTMLInputElement)} onBlurCapture={()=>setEditing(false)} noValidate id={formId} ref={formNode} onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <form noValidate id={formId} ref={formNode} onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pb-16 [&_input]:scroll-mb-36 lg:pb-0">
           <FormField
             control={form.control}
             name="quantity"
@@ -472,7 +484,7 @@ export function OrderForm({userId,serviceType,
               )}
             />
           </details>
-          <Button type="submit" variant="gradient" className={formVisible && !editing ? "hidden w-full lg:inline-flex" : "w-full"} disabled={reviewDisabled}>
+          <Button type="submit" variant="gradient" className={formVisible ? "hidden w-full lg:inline-flex" : "w-full"} disabled={reviewDisabled}>
             {loading ? <Loader2 className="animate-spin" /> : <Zap />}
             {reviewLabel}
           </Button>
@@ -480,15 +492,15 @@ export function OrderForm({userId,serviceType,
         </form>
       </Form>
 
-      {formVisible && !editing && !confirmValues && !conflicts && createPortal(
-        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-3 border-t bg-background px-4 py-2 shadow-sm lg:hidden">
+      {formVisible && !confirmValues && !conflicts && createPortal(
+        <div style={keyboardInset>80 ? {bottom:keyboardInset}:undefined} className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[45] flex items-center justify-between gap-3 border-t bg-background px-4 py-2 shadow-sm lg:hidden">
           <div className="shrink-0"><p className="text-xs text-muted-foreground">{t("Total charge")}</p>
             <p className="font-semibold tabular-nums">{Number.isFinite(total) ? formatCurrency(total, currency) : t("Unavailable")}</p></div>
-          <Button variant="gradient" type="submit" form={formId} disabled={reviewDisabled}>{reviewLabel}</Button>
+          <Button className="min-w-0 whitespace-normal text-center" variant="gradient" type="submit" form={formId} disabled={reviewDisabled}>{reviewLabel}</Button>
         </div>, document.body)}
       {/* Duplicate URL warning */}
       <Dialog open={!!conflicts} onOpenChange={(open) => !open && setConflicts(null)}>
-        <DialogContent>
+        <DialogContent className="grid-cols-1 w-[calc(100%_-_1rem)] max-h-[90dvh] min-w-0 overflow-x-hidden p-4 [overflow-wrap:anywhere] sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-warning" />
@@ -531,7 +543,7 @@ export function OrderForm({userId,serviceType,
 
       {/* Order confirmation */}
       <Dialog open={!!confirmValues} onOpenChange={(open) => !open && !loading && setConfirmValues(null)}>
-        <DialogContent>
+        <DialogContent className="grid-cols-1 w-[calc(100%_-_1rem)] max-h-[90dvh] min-w-0 overflow-x-hidden p-4 [overflow-wrap:anywhere] sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ShoppingCart className="h-5 w-5 text-primary" />
@@ -545,7 +557,7 @@ export function OrderForm({userId,serviceType,
             <div className="space-y-2 text-sm">
               <div className="rounded-lg border p-3">
                 <p className="text-xs text-muted-foreground"><CustomerText value="Service" /></p>
-                <p className="mt-0.5 line-clamp-2 font-medium">{serviceName}</p>
+                <p className="mt-0.5 break-words font-medium">{serviceName}</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-lg bg-muted/50 p-3">

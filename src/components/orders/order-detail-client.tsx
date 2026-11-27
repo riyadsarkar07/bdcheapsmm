@@ -28,6 +28,7 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {dhakaTime,refillDeadline} from "@/lib/customer-order";
+import {CopyOrderDetails} from "@/components/orders/copy-order-details";
 import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
@@ -264,13 +265,14 @@ export function OrderDetailClient({
           </Card>
         </div>
 
-        <Card className="h-fit min-w-0 lg:sticky lg:top-24">
+        <Card id="order-actions" className="scroll-mt-24 h-fit min-w-0 lg:sticky lg:top-24">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Layers className="h-4 w-4 text-primary" /> <CustomerText value="Actions" />
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2.5">
+            <CopyOrderDetails number={order.order_number} provider={order.provider_order_id} service={order.checkout_terms && typeof order.checkout_terms==="object" && !Array.isArray(order.checkout_terms) && typeof order.checkout_terms.service==="string" ? order.checkout_terms.service : order.services?.name||t("Service")} quantity={order.quantity} status={providerStatus||t(order.status)}/>
             {isOwner && <>
               {canRefill && <Button asChild variant="outline" className="w-full"><Link href={`/support/new?order=${order.id}&drop=1`}>{t("Report follower drop")}</Link></Button>}
               {order.service_id && !canCancel && <Button asChild variant="gradient" className="w-full"><Link href={`/services/${order.service_id}?repeat=${order.id}`}>{t("Order again")}</Link></Button>}
