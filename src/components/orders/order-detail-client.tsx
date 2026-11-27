@@ -153,7 +153,7 @@ export function OrderDetailClient({
   const canRetry = orderState.status === "failed" || orderState.status === "rejected";
   const deadline=refillDeadline(snapshot);
   const expired=!!deadline && Date.parse(deadline)<Date.now();
-  const reviewing=snapshot && typeof snapshot==="object" && !Array.isArray(snapshot) && ["pending","processing","in progress"].includes(String(snapshot.refill_status).toLowerCase());
+  const reviewing=!!order.refill_claimed_at||["submitted","pending","processing","in progress","in_progress"].includes(String(order.provider_refill_status).toLowerCase())||!order.provider_refill_status&&snapshot && typeof snapshot==="object" && !Array.isArray(snapshot) && ["pending","processing","in progress"].includes(String(snapshot.refill_status).toLowerCase());
   const reason=!canRefill?"Refill opens after delivery":expired?"Refill window ended":reviewing?"A refill is under review":!order.provider_order_id?"Awaiting provider order ID":(order.refill_count??0)>=2?"Refill limit reached":refillDisabled?"No automatic refill":null;
   const delivered = order.remain == null || order.quantity <= 0 ? null : Math.min(order.quantity, Math.max(0, order.quantity - order.remain));
   const progress = delivered == null ? null : Math.round(100 * delivered / order.quantity);

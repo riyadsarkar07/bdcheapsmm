@@ -29,6 +29,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { PaymentStatusBadge } from "@/components/status-badges";
+import {StaffCorrection} from "@/components/payments/deposit-followup";
 import { approvePaymentAction, rejectPaymentAction } from "@/lib/actions/admin";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import type { PaymentStatus } from "@/lib/types/database";
@@ -330,6 +331,7 @@ export function AdminPayments({ payments }: { payments: PaymentRow[] }) {
                 </div>
               ) : null}
               <PaymentScreenshot paymentId={viewing.id} screenshotUrl={viewing.screenshot_url} />
+              {viewing.status==="pending"&&<StaffCorrection id={viewing.id}/>}
               {viewing.status === "approved" ? (
                 <div className="flex justify-end pt-1">
                   <Button asChild variant="outline" size="sm">

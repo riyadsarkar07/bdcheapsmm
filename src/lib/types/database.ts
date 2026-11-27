@@ -134,6 +134,7 @@ export type Service = {
 };
 
 export type Order = {
+  refill_claimed_at?:string|null; provider_refill_id?:string|null; provider_refill_status?:string|null; refill_poll_after?:string|null; refill_checked_at?:string|null;
   checkout_terms?: Json | null;
   id: string;
   order_number: string;
@@ -158,6 +159,7 @@ export type Order = {
 };
 
 export type PaymentRequest = {
+  resume_service?:string|null; resume_draft?:Json|null; correction_reason?:string|null;
   id: string;
   user_id: string;
   method: string;
@@ -448,6 +450,8 @@ type CustomerOrder = Pick<Order,"id"|"order_number"|"provider_order_id"|"link"|"
 export type Database = {
   public: {
     Tables: {
+      customer_settings:UserTable<{user_id:string;key:string;value:Json}>;
+      refill_reminders:UserTable<{order_id:string;user_id:string;deadline:string;sent_at:string|null}>;
       profiles: {
         Row: Profile;
         Insert: Partial<Profile> & { id: string };
@@ -861,6 +865,13 @@ export type Database = {
     };
     Views: {customer_action_orders:{Row:CustomerOrder & {issue:string;ticket_id:string|null};Relationships:[]};customer_order_index:{Row:CustomerOrder;Relationships:[]};customer_refill_activity:{Row:{id:string;order_id:string;order_number:string;event:string;ticket_id:string|null;created_at:string};Relationships:[]}};
     Functions: {
+      deposit_help:{Args:{p_id:string};Returns:string};
+      save_order_batch:{Args:{p_id:string;p_version:number;p_batch:Json};Returns:number};
+      delivery_sample:{Args:{p_service:string};Returns:{samples:number;minutes:number|null}[]};
+      today_wallet_spend:{Args:{p_currency:string};Returns:number};
+      monthly_order_statement:{Args:{p_month:string};Returns:{project:string;order_number:string;posted:string;entry:string;amount:number;currency:string}[]};
+      deliver_refill_reminders:{Args:Record<never,never>;Returns:undefined};
+      my_payment_reference:{Args:{p_method:string;p_tx:string};Returns:string|null};
       customer_spending:{Args:Record<string,never>;Returns:{category_name:string;currency:string;spent:number;refunded:number}[]};
       service_incident:{Args:{p_service:string};Returns:string|null};
       is_admin: { Args: Record<never, never>; Returns: boolean };

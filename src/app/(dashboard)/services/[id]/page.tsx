@@ -1,3 +1,4 @@
+import {CustomerText} from "@/components/customer-language";
 import {BulkOrders} from "@/components/services/bulk-orders";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -20,7 +21,7 @@ export const maxDuration = 60;
 export default async function ServiceOrderPage({
   params, searchParams,
 }: {
-  searchParams: Promise<{ repeat?: string; back?: string }>;
+  searchParams: Promise<{ repeat?: string; back?: string;deposit?:string }>;
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
@@ -36,10 +37,16 @@ export default async function ServiceOrderPage({
     .eq("id", id)
     .maybeSingle();
 
-  if (!service || !service.is_active) notFound();
-  const { repeat, back } = await searchParams;
+  if(!service||!service.is_active){
+    const query=supabase.from("services").select("id,name,price").eq("is_active",true).order("price").limit(6);
+    const {data}=await (service?.category_id?query.eq("category_id",service.category_id):query);
+    return <main className="glass-card space-y-3 p-5"><h1><CustomerText value="Service unavailable"/></h1><p><CustomerText value="Available alternatives"/></p>{data?.map(s=><Link className="block underline" href={"/services/"+s.id} key={s.id}>{s.name} · {formatUsd(s.price)} / 1k</Link>)}<Link href="/services"><CustomerText value="Browse all services"/></Link></main>;
+  }
+  const { repeat, back,deposit } = await searchParams;
+  const draft=deposit?(await supabase.from("payment_requests").select("resume_draft").eq("id",deposit).eq("user_id",user.id).eq("resume_service",id).eq("status","approved").maybeSingle()).data?.resume_draft:null;
+  const resumed=draft&&typeof draft==="object"&&!Array.isArray(draft)&&typeof draft.link==="string"&&typeof draft.quantity==="number"?{link:draft.link,quantity:draft.quantity,coupon:String(draft.coupon||"")}:null;
   const previous = repeat ? (await supabase.from("orders").select("link,quantity")
-    .eq("id", repeat).eq("service_id", id).eq("user_id", user.id).maybeSingle()).data : null;
+    .eq("id", repeat).eq("service_id", id).eq("user_id", user.id).maybeSingle()).data : resumed;
   if (repeat && !previous) notFound();
 
   return (

@@ -1,5 +1,7 @@
 "use client";
 
+import {CheckoutTools,SpendingLimits} from "./checkout-tools";
+import {persist,preference} from "@/lib/customer-workspace";
 import { createPortal } from "react-dom";
 import { CustomerText } from "@/components/customer-language";
 import * as React from "react";
@@ -75,7 +77,7 @@ interface OrderFormProps {
   maxQuantity: number;
   balance: number;
   currency: string;
-  previous?: { quantity: number; link: string } | null;
+  previous?: { quantity: number; link: string;coupon?:string } | null;
   linkPlaceholder?: string;
   /** Human-readable provider ETA, e.g. "0-1 hours". */
   averageTime?: string | null;
@@ -128,7 +130,7 @@ export function OrderForm({userId,serviceType,
       if (message) ctx.addIssue({ code: "custom", path: ["link"], message: t(message) });
     })),
     mode: "onBlur",
-    defaultValues: { quantity: Math.max(minQuantity, Math.min(maxQuantity, previous?.quantity ?? suggested)), link: previous?.link ?? "", coupon: "" },
+    defaultValues: { quantity: Math.max(minQuantity, Math.min(maxQuantity, previous?.quantity ?? suggested)), link: previous?.link ?? "", coupon: previous?.coupon??"" },
   });
 
   const storageKey="checkout:"+userId+":"+serviceId;
@@ -146,6 +148,19 @@ export function OrderForm({userId,serviceType,
     return ()=>{viewport.removeEventListener("resize",measure);viewport.removeEventListener("scroll",measure);};
   },[]);
   const [templates,setTemplates]=React.useState<{name:string;quantity:number;link:string}[]>([]);
+  const writer=React.useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
+  React.useEffect(()=>{
+    let active=true,edited=false;
+    const key="draft:"+serviceId;
+    const sub=form.watch((v,info)=>{
+      if(!info.name)return;edited=true;clearTimeout(writer.current);
+      const draft={quantity:Number(v.quantity)||minQuantity,link:v.link||"",coupon:v.coupon||""};
+      writer.current=setTimeout(()=>{void persist(userId,key,draft).catch(()=>{});},650);
+    });
+    void preference(userId,key).then(v=>{if(active&&!previous&&!edited&&v&&typeof v==="object"&&!Array.isArray(v)&&typeof v.link==="string"&&typeof v.quantity==="number")form.reset({link:v.link,quantity:v.quantity,coupon:String(v.coupon||"")});}).catch(()=>{});
+    void preference(userId,"templates:"+serviceId).then(v=>{if(active&&Array.isArray(v))setTemplates(v.filter(x=>x&&typeof x==="object"&&"name" in x&&"quantity" in x&&"link" in x) as typeof templates);}).catch(()=>{});
+    return()=>{active=false;sub.unsubscribe();};
+  },[userId,serviceId,previous,form,minQuantity]);
   const [retryCheck,checkAgain]=React.useState(0);
   const [recovering,setRecovering]=React.useState(false);
   React.useEffect(()=>{
@@ -178,7 +193,8 @@ export function OrderForm({userId,serviceType,
   const quoteKey = JSON.stringify([serviceId, quantity, coupon]);
   const applied = !!coupon && quote?.key === quoteKey;
   const needsQuote = !!coupon && !applied;
-  const usd = applied ? quote.price : computeOrderCharge(pricePerUnit, quantity);
+  const [revision,setRevision]=React.useState<{key:string;old:number;price:number}|null>(null);
+  const usd = revision?.key===quoteKey?revision.price:applied ? quote.price : computeOrderCharge(pricePerUnit, quantity);
   const total = walletCharge(usd, currency);
   const [couponError,setCouponError] = React.useState("");
   React.useEffect(() => {
@@ -225,7 +241,7 @@ export function OrderForm({userId,serviceType,
       if (result.success && result.data) {
         toast.success(t("Order recorded")+" #"+result.data.orderNumber);
         setQuote(null);
-        form.setValue("coupon", "");
+        clearTimeout(writer.current);await persist(userId,"draft:"+serviceId,null).catch(()=>{});form.reset({link:"",quantity:suggested,coupon:""});
         sessionStorage.removeItem(storageKey);sessionStorage.removeItem(storageKey+":attempt");
         setConflicts(null);
         setPendingValues(null);
@@ -234,6 +250,7 @@ export function OrderForm({userId,serviceType,
         router.push(`/orders/${result.data.orderId}`);
         router.refresh();
       } else {
+        if(result.revisedUsd!=null){setRevision({key:quoteKey,old:usd,price:result.revisedUsd});setConfirmValues(null);return;}
         setQuote(null);
         toast.error(result.error ?? "Failed to place order");
       }
@@ -295,11 +312,13 @@ export function OrderForm({userId,serviceType,
       {previous && previous.quantity !== form.formState.defaultValues?.quantity && (
         <p className="mb-3 text-sm text-muted-foreground"><CustomerText value="The service limits changed. Check the adjusted quantity before placing this order." /></p>
       )}
+      {revision?.key===quoteKey&&<p role="alert">Confirm the updated charge · {formatCurrency(walletCharge(revision.old,currency),currency)} → {formatCurrency(total,currency)}</p>}
       {incident&&<p role="status" className="mb-3 rounded border p-3">{t(incident)}</p>}
       <details className="mb-3 rounded border p-3 text-sm"><summary>{t("Order templates")}</summary>
         <Input aria-label={t("Template name")} placeholder={t("Template name")} value={name} maxLength={60} onChange={e=>setName(e.target.value)}/>
         <Button type="button" variant="outline" disabled={!name.trim()||!form.watch("link")} onClick={()=>{
           const next=[{name:name.trim(),quantity:Number(form.getValues("quantity")),link:form.getValues("link")},...templates.filter(v=>v.name!==name.trim())].slice(0,20);
+          void persist(userId,"templates:"+serviceId,next).catch(()=>toast.error("Template saved on this device only"));
           localStorage.setItem(storageKey+":templates",JSON.stringify(next));setTemplates(next);setName("");
         }}>{t("Save template")}</Button>{templates.map(v=><Button type="button" variant="ghost" key={v.name} onClick={()=>form.reset({link:v.link,quantity:v.quantity,coupon:""})}>{v.name}</Button>)}</details>
       <Form {...form}>
@@ -423,7 +442,7 @@ export function OrderForm({userId,serviceType,
                 </div>
               </div>
               <Button asChild variant="gradient" size="sm" className="w-full">
-                <a href={"/add-funds?bdt="+Math.ceil((total-balance)*(currency==="USD"?126:1))}>
+                <a onClick={async e=>{e.preventDefault();const url=e.currentTarget.href,v=form.getValues();clearTimeout(writer.current);try{await persist(userId,"draft:"+serviceId,{quantity:Number(v.quantity),link:v.link,coupon:v.coupon||""});router.push(url);}catch{toast.error("Could not save draft");}}} href={"/add-funds?bdt="+Math.ceil((total-balance)*(currency==="USD"?126:1))+"&resume="+serviceId}>
                   <Wallet /> <CustomerText value="Add Funds" /> · {formatCurrency(total-balance,currency)}
                 </a>
               </Button>
@@ -452,6 +471,7 @@ export function OrderForm({userId,serviceType,
             )}
           />
 
+          <CheckoutTools user={userId} service={serviceId} platform={platform} type={serviceType} link={form.watch("link")} rate={pricePerUnit} min={minQuantity} max={maxQuantity} onLink={v=>form.setValue("link",v,{shouldValidate:true})} onQuantity={v=>form.setValue("quantity",v,{shouldValidate:true})}/>
           <details className="rounded-lg border px-3 py-2">
             <summary className="cursor-pointer text-sm font-medium">{t("Coupon (optional)")}{applied && " ✓"}</summary>
             <FormField
@@ -577,6 +597,7 @@ export function OrderForm({userId,serviceType,
                 <p className="text-xs text-muted-foreground"><CustomerText value="Target link" /></p>
                 <p className="mt-0.5 break-all font-mono text-xs">{confirmValues.link}</p>
               </div>
+              <SpendingLimits user={userId} currency={currency} total={total}/>
               {averageTime ? (
                 <div className="flex items-center justify-between rounded-lg bg-muted/50 p-3">
                   <span className="flex items-center gap-1.5 text-xs text-muted-foreground">

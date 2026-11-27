@@ -1,3 +1,4 @@
+import {BatchHistory} from "@/components/orders/batch-history";
 import { CustomerText } from "@/components/customer-language";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
@@ -13,9 +14,9 @@ export const revalidate = 0;
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string;batch?:string }>;
 }) {
-  const { status } = await searchParams;
+  const { status,batch } = await searchParams;
   const { user, error } = await requireUser();
   if (error || !user) return null;
 
@@ -48,6 +49,8 @@ export default async function OrdersPage({
         </Button>
       </PageHeader>
 
+      <Link className="mb-3 block underline" href="/orders/statement"><CustomerText value="Monthly client statement"/></Link>
+      <BatchHistory user={user.id} id={batch}/>
       <OrdersList initialTotal={count ?? 0} initialOrders={orders ?? []} userId={user.id} statusFilter={status} />
     </div>
   );

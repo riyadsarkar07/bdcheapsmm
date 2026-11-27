@@ -28,6 +28,16 @@ export async function GET(request: Request) {
 
   const supabase = createAdminClient();
 
+  await supabase.rpc("deliver_refill_reminders",{});
+  const {data:refills}=await supabase.from("orders").select("id,provider_refill_id,provider_id").not("provider_refill_id","is",null)
+    .or("refill_poll_after.is.null,refill_poll_after.lte."+new Date().toISOString()).order("refill_poll_after",{nullsFirst:true}).limit(4);
+  await Promise.all((refills??[]).map(async r=>{
+    if(!r.provider_id||!r.provider_refill_id)return;
+    const {data:p}=await supabase.from("providers").select("api_key,api_url,name").eq("id",r.provider_id).maybeSingle();if(!p)return;
+    const status=await providerApi.refillStatus(p,r.provider_refill_id).catch(()=>null);
+    const final=status&&["completed","rejected","cancelled","canceled","failed"].includes(status.toLowerCase());
+    await supabase.from("orders").update({...(status?{provider_refill_status:status}:{}),refill_checked_at:new Date().toISOString(),refill_poll_after:final?"9999-12-31T00:00:00Z":new Date(Date.now()+(status?1:24)*3600000).toISOString()}).eq("id",r.id).eq("provider_refill_id",r.provider_refill_id);
+  }));
   const { data: orders, error } = await supabase
     .from("orders")
     .select("id, provider_id, provider_order_id, status, start_count, remain")

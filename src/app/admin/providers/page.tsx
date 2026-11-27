@@ -1,3 +1,4 @@
+import {RefillAudit} from "@/components/admin/providers/refill-audit";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/guards";
 import { PageHeader } from "@/components/page-header";
@@ -27,6 +28,7 @@ export default async function AdminProvidersPage() {
         title="Providers"
         description="Connect unlimited SMM API providers. Credentials stay server-side."
       />
+      <RefillAudit providers={(providersRes.data??[]).map(({id,name})=>({id,name}))}/>
       <AdminProviders providers={providersRes.data ?? []} serviceCounts={serviceCounts} />
     </div>
   );

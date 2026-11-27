@@ -3,7 +3,7 @@ import type { AuthUser } from "@supabase/supabase-js";
 import type { Profile } from "@/lib/types/database";
 
 export interface ActionResult<T = undefined> {
-  success: boolean;
+  success: boolean; revisedUsd?:number;
   message?: string;
   error?: string;
   data?: T;

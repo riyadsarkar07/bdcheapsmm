@@ -240,3 +240,13 @@ export function exampleLinkForPlatform(platform: string): string {
       return "https://example.com/profile";
   }
 }
+
+export function quantityForBdtBudget(budget:number,rate:number,min:number,max:number){
+ if(!(budget>0&&rate>0&&max>=min&&min>0))return 0;
+ let lo=min,hi=max,best=0;
+ while(lo<=hi){
+   const qty=Math.floor((lo+hi)/2),charge=walletCharge(computeOrderCharge(rate,qty),"BDT");
+   if(charge<=budget){if(charge>0)best=qty;lo=qty+1;}else hi=qty-1;
+ }
+ return best;
+}

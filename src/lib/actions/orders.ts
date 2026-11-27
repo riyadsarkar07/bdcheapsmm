@@ -8,7 +8,7 @@ import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { generateOrderNumber, formatCurrency } from "@/lib/utils";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { providerApi, ProviderCancelRejected, ProviderRefillRejected } from "@/lib/provider/smmfollow";
-import {refillDeadline} from "@/lib/customer-order";
+import {refillBlock} from "@/lib/refill-eligibility";
 import { targetLinkError } from "@/lib/order-link";
 import { detectPlatform, parseChargeError } from "@/lib/pricing";
 import { assertOrderPricingSafety } from "@/lib/pricing-safety";
@@ -170,7 +170,7 @@ async function placeOrder({
   });
   if (quote.error || quote.data == null) return fail(quote.error?.message ?? "Unable to quote order.");
   const price = quote.data;
-  if (expectedUsd !== undefined && expectedUsd !== price) return fail("Price changed. Review your order again.");
+  if (expectedUsd !== undefined && expectedUsd !== price) return {success:false,error:"Price changed. Review your order again.",revisedUsd:price};
 
   let providerRecord: { id: string; name: string; api_url: string; api_key: string; status: string } | null = null;
   try {
@@ -462,22 +462,14 @@ export async function refillOrderAction(orderId: string, askProvider = false): P
 
   const { data: order } = await supabase
     .from("orders")
-    .select("id, user_id, provider_id, provider_order_id, order_number, refill_count, status, provider_response, services(meta, name, description)")
+    .select("id, user_id, provider_id, provider_order_id, order_number, refill_count, status, provider_response,provider_refill_status,refill_claimed_at, services(meta, name, description)")
     .eq("id", orderId)
     .single();
 
   if (!order) return fail("Order not found.");
   if (order.user_id !== user.id && !isAdminProfile(user)) return fail("Forbidden.");
-  if (!order.provider_order_id) return fail("No provider order reference.");
-  if (!["completed", "partial"].includes(order.status)) return fail("Refill requires a completed or partial order.");
-  const deadline=refillDeadline(order.provider_response);
-  if(deadline&&Date.parse(deadline)<Date.now())return fail("Refill window ended");
-  const response=order.provider_response;
-  if(response&&typeof response==="object"&&!Array.isArray(response)&&["pending","processing","in progress"].includes(String(response.refill_status).toLowerCase()))return fail("A refill is under review");
-  if (!(askProvider && isAdminProfile(user)) && refillTerms(order.services?.meta, order.services?.name, order.services?.description ?? "").disabled) return fail("Refill is not available for this service.");
-  if ((order.refill_count ?? 0) >= 2) return fail("Refill limit reached for this order.");
-  if (!order.provider_id) return fail("Provider not found.");
-
+  const blocked=refillBlock(order,askProvider&&isAdminProfile(user));
+  if(blocked||!order.provider_id||!order.provider_order_id)return fail(blocked||"Missing provider reference");
   const { data: provider } = await createAdminClient()
     .from("providers")
     .select("id, name, api_url, api_key")
@@ -486,16 +478,22 @@ export async function refillOrderAction(orderId: string, askProvider = false): P
   if (!provider) return fail("Provider not found.");
 
   await writeLog({ userId: user.id, action: "order_refill", entityType: "orders", entityId: orderId, description: isAdminProfile(user) ? "Admin requested a provider refill." : "Provider refill requested." });
+  const db=createAdminClient(),stamp=new Date().toISOString();
+  let claim=db.from("orders").update({refill_claimed_at:stamp}).eq("id",orderId).eq("status",order.status).is("refill_claimed_at",null);
+  claim=order.refill_count==null?claim.is("refill_count",null):claim.eq("refill_count",order.refill_count);
+  const reserved=await claim.select("id").maybeSingle();if(!reserved.data)return fail("Order changed or refill already submitted.");
   let receipt;
   try {
     receipt = await providerApi.refill(provider, order.provider_order_id);
   } catch (err) {
+    if(err instanceof ProviderRefillRejected)await db.from("orders").update({refill_claimed_at:null}).eq("id",orderId).eq("refill_claimed_at",stamp);
     await writeLog({ userId: user.id, action: "order_refill", entityType: "orders", entityId: order.id,
       description: err instanceof ProviderRefillRejected ? "Provider declined the refill request." : "Refill request did not receive provider confirmation." });
     return fail((err as Error).message);
   }
 
-  await createAdminClient().from("orders").update({ refill_count: (order.refill_count ?? 0) + 1 }).eq("id", orderId);
+  const saved=await db.from("orders").update({refill_claimed_at:null,provider_refill_id:receipt.reference,provider_refill_status:receipt.reference?"Submitted":null,refill_checked_at:null,refill_poll_after:null,refill_count:(order.refill_count??0)+1}).eq("id",orderId).eq("refill_claimed_at",stamp).select("id").maybeSingle();
+  if(!saved.data)return fail("Provider accepted the refill. Contact support to reconcile its receipt.");
   await writeLog({
     userId: user.id,
     action: "order_refill",

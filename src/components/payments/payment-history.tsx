@@ -1,3 +1,4 @@
+import {DepositFollowup} from "./deposit-followup";
 import {CustomerText} from "@/components/customer-language";
 import {dhakaTime} from "@/lib/customer-order";
 import Link from "next/link";
@@ -27,7 +28,7 @@ export function PaymentHistory({ requests }: { requests: PaymentRequest[] }) {
           <div className="space-y-3">
             {requests.map((request) => (
               <div
-                key={request.id}
+                id={"deposit-"+request.id} key={request.id}
                 className="flex items-center justify-between gap-3 rounded-lg border p-3"
               >
                 <div className="min-w-0">
@@ -41,6 +42,8 @@ export function PaymentHistory({ requests }: { requests: PaymentRequest[] }) {
                     {dhakaTime(request.created_at)}
                   </p>
                   <p className="text-xs"><CustomerText value={request.status==="pending"?"Submitted · awaiting review":"Review updated"}/>{request.status!=="pending"&&" · "+dhakaTime(request.updated_at)}</p>
+                  <DepositFollowup p={request}/>
+                  {request.status==="approved"&&request.resume_service&&<Link className="underline" href={"/services/"+request.resume_service+"?deposit="+request.id}><CustomerText value="Continue order"/></Link>}
                   {request.admin_note ? (
                     <p className="mt-1 text-xs text-muted-foreground">
                       Note: {request.admin_note}

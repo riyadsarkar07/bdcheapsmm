@@ -1,3 +1,6 @@
+import {CustomerText} from "@/components/customer-language";
+import {createAdminClient} from "@/lib/supabase/admin";
+import {dhakaTime} from "@/lib/customer-order";
 import { requireUser } from "@/lib/guards";
 import { Settings } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
@@ -29,6 +32,7 @@ export default async function SettingsPage() {
 
   const { data: rawSessions } = await supabase.rpc("list_user_sessions");
 
+  const recent=await createAdminClient().from("logs").select("created_at,action").eq("user_id",user.id).in("action",["login","logout"]).order("created_at",{ascending:false}).limit(10);
   const sessions: ActiveSession[] = (rawSessions ?? []).map((raw) => {
     const parsed = parseUserAgent(raw.user_agent);
     return {
@@ -57,6 +61,7 @@ export default async function SettingsPage() {
       <div className="grid gap-6">
         <ProfileSettings user={user} />
         <ActiveSessions sessions={sessions} />
+        <details className="glass-card p-4"><summary><CustomerText value="Recent sign-in activity"/></summary>{recent.data?.length?recent.data.map((r,i)=><p key={i}>{r.action==="login"?"Signed in":"Signed out"} · {dhakaTime(r.created_at)}</p>):<p><CustomerText value="No recent activity recorded."/></p>}</details>
       </div>
     </div>
   );

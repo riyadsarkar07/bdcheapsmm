@@ -58,10 +58,10 @@ const allMethods = [
 ];
 
 export function AddFundsForm({
-  payments, initialAmount,
+  payments, initialAmount,resumeService,
   userId,
 }: {
-  initialAmount?:number;
+  initialAmount?:number;resumeService?:string;
   payments: PaymentSettings;
   userId: string;
 }) {
@@ -147,6 +147,8 @@ export function AddFundsForm({
     }
     setLoading(true);
     try {
+      const existing=await createClient().rpc("my_payment_reference",{p_method:values.method,p_tx:values.transactionId});
+      if(existing.data){toast.info("Payment already recorded");router.push("/add-funds?payment="+existing.data+"#deposit-"+existing.data);return;}
       if (uploadedProof.current?.file !== screenshot) {
         const path = `${userId}/${crypto.randomUUID()}.${screenshot.type.split("/")[1]}`;
         const upload = await createClient().storage.from("payment-proofs").upload(path, screenshot);
@@ -154,7 +156,7 @@ export function AddFundsForm({
         uploadedProof.current = { file: screenshot, path };
       }
       const result = await submitPaymentAction({
-        method: values.method,
+        resumeService,method: values.method,
         senderNumber: values.senderNumber,
         amount: values.amount,
         transactionId: values.transactionId,
@@ -162,11 +164,11 @@ export function AddFundsForm({
         screenshotPath: uploadedProof.current.path,
       });
       if (result.success) {
-        toast.success(t("Payment request submitted! Awaiting approval."));
+        toast.success(t(result.message||"Payment request submitted! Awaiting approval."));
         form.reset({ method: defaultMethod, senderNumber: "", amount: undefined as unknown as number, transactionId: "", note: "" });
         setScreenshot(null);
         setPreview(null);
-        router.refresh();
+        if(result.data)router.push("/add-funds?payment="+result.data.id+"#deposit-"+result.data.id);router.refresh();
       } else {
         toast.error(result.error ?? "Failed to submit payment request");
       }

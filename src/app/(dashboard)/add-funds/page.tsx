@@ -11,7 +11,7 @@ import { Wallet, ArrowDownToLine } from "lucide-react";
 
 export const revalidate = 0;
 
-export default async function AddFundsPage({searchParams}:{searchParams:Promise<{bdt?:string}>}) {
+export default async function AddFundsPage({searchParams}:{searchParams:Promise<{bdt?:string;resume?:string;payment?:string}>}) {
   const { user, error } = await requireUser();
   if (error || !user) return null;
 
@@ -27,7 +27,8 @@ export default async function AddFundsPage({searchParams}:{searchParams:Promise<
       .limit(20),
   ]);
 
-  const requested=Number((await searchParams).bdt);
+  const {bdt,resume,payment}=await searchParams;const requested=Number(bdt);
+  if(payment&&!paymentRequestsRes.data?.some(p=>p.id===payment)){const {data:p}=await supabase.from("payment_requests").select("*").eq("id",payment).eq("user_id",user.id).maybeSingle();if(p)paymentRequestsRes.data?.unshift(p);}
   const rows = await resolveScreenshotUrls(supabase, paymentRequestsRes.data ?? []);
   const pending = rows.filter((r) => r.status === "pending").length;
 
@@ -65,7 +66,7 @@ export default async function AddFundsPage({searchParams}:{searchParams:Promise<
 
       <AddFundsInstructions />
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <AddFundsForm initialAmount={requested>0&&requested<=100000?Math.max(1,Math.ceil(requested)):undefined}
+        <AddFundsForm resumeService={resume} initialAmount={requested>0&&requested<=100000?Math.max(1,Math.ceil(requested)):undefined}
           payments={settings.payments}
           userId={user.id}
         />

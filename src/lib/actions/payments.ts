@@ -17,8 +17,8 @@ export async function submitPaymentAction(input: {
   amount: number;
   transactionId: string;
   note?: string;
-  screenshotPath: string;
-}): Promise<ActionResult> {
+  screenshotPath: string; resumeService?:string;
+}): Promise<ActionResult<{id:string}>> {
   const headerStore = await headers();
   const ip = getClientIp(headerStore);
 
@@ -51,6 +51,8 @@ export async function submitPaymentAction(input: {
     return fail("Payment screenshot is missing or invalid.");
   }
 
+  const resumeService=input.resumeService&&/^[a-f0-9-]{36}$/i.test(input.resumeService)?input.resumeService:null;
+  const draft=resumeService?(await supabase.from("customer_settings").select("value").eq("user_id",user.id).eq("key","draft:"+resumeService).maybeSingle()).data?.value:null;
   const { data: payment, error: insertError } = await supabase
     .from("payment_requests")
     .insert({
@@ -61,7 +63,7 @@ export async function submitPaymentAction(input: {
       amount: parsed.data.amount,
       currency: "BDT",
       transaction_id: parsed.data.transactionId,
-      screenshot_url: screenshotUrl,
+      resume_service:resumeService,resume_draft:draft,screenshot_url:screenshotUrl,
       note: parsed.data.note || null,
       status: "pending",
     })
@@ -69,11 +71,9 @@ export async function submitPaymentAction(input: {
     .single();
 
   if (insertError?.code === "23505") {
-    const existing = await supabase.from("payment_requests").select("id")
-      .eq("id", file.split(".")[0]).eq("user_id", user.id)
-      .eq("transaction_id", parsed.data.transactionId).eq("amount", parsed.data.amount)
-      .eq("method", parsed.data.method).eq("sender_number", parsed.data.senderNumber).maybeSingle();
-    if (existing.data) return ok(undefined, "Payment request already submitted.");
+    const existing=await supabase.rpc("my_payment_reference",{p_method:parsed.data.method,p_tx:parsed.data.transactionId});
+    if(existing.data)return ok({id:existing.data},"Payment already recorded.");
+    return fail("Payment reference unavailable. Contact support.");
   }
   if (insertError || !payment) {
     return fail(
@@ -93,7 +93,7 @@ export async function submitPaymentAction(input: {
     userAgent: headerStore.get("user-agent"),
   });
 
-  return ok(undefined, "Payment request submitted. Awaiting approval.");
+  return ok({id:payment.id}, "Payment request submitted. Awaiting approval.");
 }
 
 export async function getMyPaymentRequestsAction(): Promise<ActionResult<unknown[]>> {

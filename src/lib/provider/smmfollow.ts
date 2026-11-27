@@ -291,6 +291,9 @@ export const providerApi = {
     return data as unknown as ProviderStatusResult;
   },
 
+  async refillStatus(provider:Pick<Provider,"api_url"|"api_key"|"name">,reference:string){
+    const result=asRecord(await post(provider,"refill_status",{refill:reference}));return !result.error&&typeof result.status==="string"? result.status.trim().slice(0,100)||null:null;
+  },
   async refill(
     provider: Pick<Provider, "api_url" | "api_key" | "name">,
     providerOrderId: string | number

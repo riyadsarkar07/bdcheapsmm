@@ -1,3 +1,4 @@
+import {DeliveryReceipt} from "@/components/orders/delivery-receipt";
 import {saveOrderNote} from "@/lib/actions/customer-tools";
 import { CustomerText } from "@/components/customer-language";
 import Link from "next/link";
@@ -106,6 +107,9 @@ export default async function OrderDetailPage({
           <p><CustomerText value="Refill"/> · <CustomerText value={refillTerms({refill:purchased.refill},String(purchased.service),String(purchased.description??"")).label}/></p>
         </> : <p><CustomerText value="Original service terms were not recorded for this order."/> <CustomerText value="Quantity"/> · {order.quantity} · <CustomerText value="Price"/> · {formatCurrency(order.price,order.currency)}</p>}
       </section>
+      <DeliveryReceipt qty={order.quantity} remain={order.remain} status={typeof snapshot.status==="string"?snapshot.status:order.status} number={order.order_number}/>
+      {order.provider_refill_id&&<p className="glass-card mt-4 p-4">Provider refill #{order.provider_refill_id} · {order.provider_refill_status||"Awaiting status"}</p>}
+      {order.status==="partial"&&<p className="glass-card p-4">Ordered · {order.quantity} · Provider remaining · {order.remain??"Unreported"} · Wallet credits · {credits.error?"Unavailable":credits.data?.length?credits.data.map(r=>formatCurrency(r.amount,r.currency)).join(" + "):"No credit recorded"}</p>}
       {refundStarted && <section className="glass-card mt-4 space-y-2 p-4 text-sm"><h2 className="font-semibold"><CustomerText value="Refund tracking"/></h2>
         <ol className="space-y-2">
           <li><strong><CustomerText value="Request submitted"/></strong> · {request?dhakaTime(request.created_at):<CustomerText value={order.cancel_count?"Request recorded":"No request record"}/>}</li>
