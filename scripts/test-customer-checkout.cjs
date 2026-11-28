@@ -8,6 +8,9 @@ const {quantityForBdtBudget,computeOrderCharge,walletCharge}=require("../src/lib
 const {providerApi}=require("../src/lib/provider/smmfollow.ts");
 const {refillBlock}=require("../src/lib/refill-eligibility.ts");
 async function run(){
+ const {publicRefillButtons}=require("../src/lib/provider/public-refill-catalog.ts");
+ const row=(id,terms)=>'<tr><td data-filter-table-service-id="'+id+'"></td><td>'+terms+'</td></tr>';
+ assert.deepEqual(publicRefillButtons(row(1,"Refill Button: Active")+row(2,"Refill Button: Not Active")+row(3,"No description")+row(4,"Refill Button: Inactive")+row(4,"Refill Button: Active")),{"1":true,"2":false});
  assert.equal(computeOrderCharge(.15,20),0);
  assert.equal(computeOrderCharge(.15,33),0);
  const payable=computeOrderCharge(.15,34);

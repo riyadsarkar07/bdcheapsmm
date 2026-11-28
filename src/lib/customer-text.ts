@@ -1,4 +1,6 @@
 const bangla: Record<string, string> = {
+  "Ask support about refill":"রিফিলের জন্য সাপোর্টে জিজ্ঞাসা করুন",
+  "Lifetime refill listed · contact support for refill review":"আজীবন রিফিল লেখা আছে · যাচাইয়ের জন্য সাপোর্টে জানান",
   "Deadline unconfirmed": "মেয়াদ নিশ্চিত হয়নি",
   "Reminder sent": "রিমাইন্ডার পাঠানো হয়েছে",
   "Cancel reminder": "রিমাইন্ডার বাতিল করুন",
@@ -400,6 +402,8 @@ export function customerText(language: string, text: string) {
   if (delivery) return delivery[2] + "টির মধ্যে " + delivery[1] + "টি ডেলিভার হয়েছে";
   const unconfirmed = text.match(/^Listed as (\d+) days · provider has not confirmed$/);
   if (unconfirmed) return "সার্ভিসে " + unconfirmed[1] + " দিন লেখা আছে · প্রোভাইডার নিশ্চিত করেনি";
+  const manual=text.match(/^Listed as (\d+) days · contact support for refill review$/);
+  if(manual)return manual[1]+" দিনের রিফিল লেখা আছে · যাচাইয়ের জন্য সাপোর্টে জানান";
   const listedDays = text.match(/^Listed as (\d+) days · automatic refill unavailable$/);
   if (listedDays) return "সার্ভিসে " + listedDays[1] + " দিন লেখা আছে · স্বয়ংক্রিয় রিফিল বন্ধ";
   const days = text.match(/^(\d+) days$/);

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {RefillAudit} from "@/components/admin/providers/refill-audit";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/guards";
@@ -28,6 +29,7 @@ export default async function AdminProvidersPage() {
         title="Providers"
         description="Connect unlimited SMM API providers. Credentials stay server-side."
       />
+      <Link className="mb-3 block text-primary underline" href="/admin/providers/refill-comparison">Compare refill availability across services</Link>
       <RefillAudit providers={(providersRes.data??[]).map(({id,name})=>({id,name}))}/>
       <AdminProviders providers={providersRes.data ?? []} serviceCounts={serviceCounts} />
     </div>

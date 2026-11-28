@@ -15,8 +15,10 @@ export function refillTerms(meta: unknown, name = "", description = "") {
     ?? text.match(/\brefill\s*[:(-]?\s*(\d+)\s*[- ]?days?\b/i)?.[1] ?? codedDays;
   const advertisedNo = /\b(?:no|without)\s+refill\b/i.test(text) || /(?:^|[|•])\s*NR\s*(?=$|[|•])/i.test(name);
   const disabled = flag === false || (flag === null && advertisedNo);
-  const short = disabled ? "No automatic refill" : flag === true ? (days ? days + " days" : "Available") : "Unconfirmed";
-  const label = disabled && days ? `Listed as ${days} days · automatic refill unavailable`
+  const lifetime=/\b(?:lifetime|unlimited)\s+refill\b/i.test(text)||/(?:^|[|•])\s*R(?:∞|ꝏ)\s*(?=$|[|•])/i.test(name);
+  const needsReview=flag===false&&!advertisedNo&&(!!days||lifetime);
+  const short = needsReview ? "Ask support about refill" : disabled ? "No automatic refill" : flag === true ? (days ? days + " days" : "Available") : "Unconfirmed";
+  const label = needsReview ? (days ? `Listed as ${days} days · contact support for refill review` : "Lifetime refill listed · contact support for refill review") : disabled && days ? `Listed as ${days} days · automatic refill unavailable`
     : flag === true && advertisedNo ? "Provider enables refill despite the service name"
     : flag === null && days && !disabled ? `Listed as ${days} days · provider has not confirmed`
     : disabled ? "Listed without automatic refill" : days ? days + " days"
