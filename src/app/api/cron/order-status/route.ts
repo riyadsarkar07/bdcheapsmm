@@ -26,6 +26,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const started = Date.now();
   const supabase = createAdminClient();
 
   await supabase.rpc("deliver_refill_reminders",{});
@@ -38,22 +39,14 @@ export async function GET(request: Request) {
     const final=status&&["completed","rejected","cancelled","canceled","failed"].includes(status.toLowerCase());
     await supabase.from("orders").update({...(status?{provider_refill_status:status}:{}),refill_checked_at:new Date().toISOString(),refill_poll_after:final?"9999-12-31T00:00:00Z":new Date(Date.now()+(status?1:24)*3600000).toISOString()}).eq("id",r.id).eq("provider_refill_id",r.provider_refill_id);
   }));
-  const { data: orders, error } = await supabase
-    .from("orders")
-    .select("id, provider_id, provider_order_id, status, start_count, remain")
-    .in("status", ["pending", "processing", "in_progress"])
-    .not("provider_order_id", "is", null);
-
-  if (error || !orders) {
-    return NextResponse.json({ ok: false, error: error?.message ?? "No orders" }, { status: 500 });
-  }
-
   const providerCache = new Map<string, { id: string; name: string; api_url: string; api_key: string }>();
   let updated = 0;
   let failed = 0;
 
-  for (const order of orders) {
-    if (!order.provider_id || !order.provider_order_id) continue;
+  let checked=0;
+  type PendingOrder={id:string;provider_id:string|null;provider_order_id:string|null;status:OrderStatus;start_count:number|null;remain:number|null};
+  async function poll(order:PendingOrder) {
+    if (!order.provider_id || !order.provider_order_id) return;
 
     let provider = providerCache.get(order.provider_id);
     if (!provider) {
@@ -62,7 +55,7 @@ export async function GET(request: Request) {
         .select("id, name, api_url, api_key")
         .eq("id", order.provider_id)
         .single();
-      if (!p) continue;
+      if (!p) return;
       provider = p;
       providerCache.set(order.provider_id, p);
     }
@@ -85,7 +78,7 @@ export async function GET(request: Request) {
           provider_response: response as never, ...counts,
         }).eq("id", order.id).eq("provider_order_id", order.provider_order_id).eq("status", order.status).select("id").maybeSingle();
         if (snapshot.error) throw snapshot.error;
-        if (!snapshot.data) continue;
+        if (!snapshot.data) return;
         const refund = await supabase.rpc("refund_order", { p_order_id: order.id, p_refunded_by: null });
         if (refund.error) throw refund.error;
         updated++;
@@ -104,5 +97,12 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: failed === 0, checked: orders.length, updated, failed }, { status: failed ? 502 : 200 });
+  while (checked < 24 && Date.now()-started < 30000) {
+    const batch=await supabase.rpc("claim_order_checks",{});
+    if(batch.error)return NextResponse.json({ok:false,checked,updated,failed},{status:500});
+    if(!batch.data?.length)break;
+    checked+=batch.data.length;
+    await Promise.all(batch.data.map(poll));
+  }
+  return NextResponse.json({ ok: failed === 0, checked, updated, failed }, { status: failed ? 502 : 200 });
 }

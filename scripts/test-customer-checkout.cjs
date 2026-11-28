@@ -8,6 +8,11 @@ const {quantityForBdtBudget,computeOrderCharge,walletCharge}=require("../src/lib
 const {providerApi}=require("../src/lib/provider/smmfollow.ts");
 const {refillBlock}=require("../src/lib/refill-eligibility.ts");
 async function run(){
+ assert.equal(computeOrderCharge(.15,20),0);
+ assert.equal(computeOrderCharge(.15,33),0);
+ const payable=computeOrderCharge(.15,34);
+ assert.equal(walletCharge(payable,"USD"),.01);
+ assert.equal(walletCharge(payable,"BDT"),1.26);
  assert.deepEqual(parseBatchInput('link,quantity\n"https://example.invalid/x",20'),[{link:"https://example.invalid/x",qty:20}]);assert.throws(()=>parseBatchInput("x,2.5"));
  for(const budget of [.01,1,1.26,6,126,252]){
   const q=quantityForBdtBudget(budget,.15,10,50000),cost=n=>walletCharge(computeOrderCharge(.15,n),"BDT");

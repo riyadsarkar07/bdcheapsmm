@@ -1,4 +1,14 @@
 const bangla: Record<string, string> = {
+  "Deadline unconfirmed": "মেয়াদ নিশ্চিত হয়নি",
+  "Reminder sent": "রিমাইন্ডার পাঠানো হয়েছে",
+  "Cancel reminder": "রিমাইন্ডার বাতিল করুন",
+  "Remind me before expiry": "মেয়াদ শেষ হওয়ার আগে মনে করিয়ে দিন",
+  "Could not load requests.": "অনুরোধগুলো লোড করা যায়নি।",
+  "Sender number": "প্রেরকের নম্বর",
+  "Correction requested": "সংশোধন চাওয়া হয়েছে",
+  "Amount (BDT)": "পরিমাণ (টাকা)",
+  "Ready": "প্রস্তুত",
+
   "Monthly client statement": "মাসিক ক্লায়েন্ট স্টেটমেন্ট",
   "Download CSV": "CSV ডাউনলোড",
   "Saved target links": "সেভ করা টার্গেট লিংক",

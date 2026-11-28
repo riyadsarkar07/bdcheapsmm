@@ -450,6 +450,7 @@ type CustomerOrder = Pick<Order,"id"|"order_number"|"provider_order_id"|"link"|"
 export type Database = {
   public: {
     Tables: {
+      refill_catalog_evidence:UserTable<{provider_id:string;checked_at:string;flags:Json}>;
       customer_settings:UserTable<{user_id:string;key:string;value:Json}>;
       refill_reminders:UserTable<{order_id:string;user_id:string;deadline:string;sent_at:string|null}>;
       profiles: {
@@ -865,6 +866,7 @@ export type Database = {
     };
     Views: {customer_action_orders:{Row:CustomerOrder & {issue:string;ticket_id:string|null};Relationships:[]};customer_order_index:{Row:CustomerOrder;Relationships:[]};customer_refill_activity:{Row:{id:string;order_id:string;order_number:string;event:string;ticket_id:string|null;created_at:string};Relationships:[]}};
     Functions: {
+      claim_order_checks:{Args:Record<never,never>;Returns:Pick<Order,"id"|"provider_id"|"provider_order_id"|"status"|"start_count"|"remain">[]};
       deposit_help:{Args:{p_id:string};Returns:string};
       save_order_batch:{Args:{p_id:string;p_version:number;p_batch:Json};Returns:number};
       delivery_sample:{Args:{p_service:string};Returns:{samples:number;minutes:number|null}[]};

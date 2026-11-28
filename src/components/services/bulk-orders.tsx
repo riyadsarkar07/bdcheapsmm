@@ -14,7 +14,7 @@ import {computeOrderCharge,walletCharge} from "@/lib/pricing";
 import {formatCurrency} from "@/lib/utils";
 import {Button} from "@/components/ui/button";
 
-type Line={link:string;qty:number;usd:number;key:string;overlap:boolean;id?:string;message?:string;editable?:boolean;revised?:number};
+type Line={link:string;qty:number;usd:number;key:string;overlap:boolean;id?:string;message?:string;uncertain?:boolean;editable?:boolean;revised?:number};
 export function BulkOrders({service,rate,min,max,currency,balance,user,platform,type}:{service:string;rate:number;min:number;max:number;currency:string;balance:number;user:string;platform:string;type:string|null}){
   const t=useCustomerText();
   const key="batch:"+user+":"+service;
@@ -53,18 +53,19 @@ export function BulkOrders({service,rate,min,max,currency,balance,user,platform,
     setBusy(true);
     const next=rows.map(r=>({...r}));
     try{await save(next);for(const row of next.filter(r=>!r.id)){
-      try{const result=await createOrderAction({requestId:row.key,serviceId:service,quantity:row.qty,link:row.link,expectedUsd:row.usd});row.id=result.data?.orderId;row.message=result.data?.status||result.error;row.revised=result.revisedUsd;
+      try{const result=await createOrderAction({requestId:row.key,serviceId:service,quantity:row.qty,link:row.link,expectedUsd:row.usd});row.uncertain=false;row.id=result.data?.orderId;row.message=result.data?.status||result.error;row.revised=result.revisedUsd;
         row.editable=!row.id&&!!result.error&&/link|quantity|price changed|balance/i.test(result.error);}
-      catch{row.message=t("Connection interrupted. Retry to check the result.");}
+      catch{row.uncertain=true;row.editable=false;row.message="Connection interrupted. Retry to check the result."; }
       await save([...next]);
+      if(row.uncertain)break;
     }}catch(e){setError((e as Error).message);}finally{setBusy(false);}
   }
   const due=rows.filter(r=>!r.id).reduce((sum,r)=>sum+walletCharge(r.usd,currency),0);
   return <details className="glass-card my-4 p-4"><summary>{t("Order multiple links")}</summary>
     {group&&<Link className="underline" href={"/orders?batch="+group}><CustomerText value="View batch summary"/></Link>}
-    <label className="block text-sm"><CustomerText value="Import CSV (link, quantity)"/><input type="file" accept=".csv,text/csv" disabled={busy||!!rows.length} onChange={async e=>{const f=e.target.files?.[0];if(!f)return;if(f.size>32000){setError("CSV is too large");return;}setInput(await f.text());setError("");}}/></label>
+    <label className="block min-w-0 text-sm"><CustomerText value="Import CSV (link, quantity)"/><input className="block max-w-full" type="file" accept=".csv,text/csv" disabled={busy||!!rows.length} onChange={async e=>{const f=e.target.files?.[0];if(!f)return;if(f.size>32000){setError("CSV is too large");return;}setInput(await f.text());setError("");}}/></label>
     <label className="block py-2 text-sm">{t("One link and quantity per line")}<textarea className="block w-full rounded border bg-background p-2" rows={4} value={input} disabled={busy||!!rows.length} onChange={e=>setInput(e.target.value)}/></label>
-    {error&&<p role="alert">{error}</p>}{rows.slice().sort((a,b)=>Number(!!b.message&&!b.id)-Number(!!a.message&&!a.id)).map(r=><div key={r.key} className="break-all border-b py-1 text-sm">{((r.message&&!r.id)||r.message==="failed"||r.message==="rejected")&&<strong>Failed · </strong>}{r.link} · {r.qty} · {formatCurrency(walletCharge(r.usd,currency),currency)} {r.overlap&&t("Active order for this link")} {r.message} {r.revised!=null&&<strong>New charge · {formatCurrency(walletCharge(r.revised,currency),currency)}</strong>} {r.id&&<Link className="underline" href={"/orders/"+r.id}>{t("View order")}</Link>}
+    {error&&<p role="alert">{error}</p>}{rows.slice().sort((a,b)=>Number(!!b.message&&!b.id)-Number(!!a.message&&!a.id)).map(r=><div key={r.key} className="break-all border-b py-1 text-sm">{((r.message&&!r.id&&!r.uncertain)||r.message==="failed"||r.message==="rejected")&&<strong>{t("Failed")} · </strong>}{r.link} · {r.qty} · {formatCurrency(walletCharge(r.usd,currency),currency)} {r.overlap&&t("Active order for this link")} {r.message&&t(r.message)} {r.revised!=null&&<strong>New charge · {formatCurrency(walletCharge(r.revised,currency),currency)}</strong>} {r.id&&<Link className="underline" href={"/orders/"+r.id}>{t("View order")}</Link>}
     {r.editable&&<button className="ml-2 underline" disabled={busy} onClick={()=>{setEditing(r.key);setLineText(r.link+" "+r.qty);}}><CustomerText value="Edit failed row"/></button>}
     {editing===r.key&&<div><input aria-label="Correct link and quantity" value={lineText} onChange={e=>setLineText(e.target.value)}/><button disabled={busy} onClick={async()=>{
        try{const parsed=parseBatchInput(lineText);if(parsed.length!==1)throw Error("Enter one row");const {link,qty}=parsed[0];
